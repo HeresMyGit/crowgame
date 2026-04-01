@@ -1184,10 +1184,14 @@ function createTruckHitLevel() {
 
             // Convert placed idle mfers to ragdolls as the truck front reaches them
             const truckFrontX = truckState.currentX + 3.5;
+            const truckZ = -1.5;
+            const truckHalfW = 1.3; // truck Z half-width for hit check
             const remaining = [];
             for (const pm of placedMfers) {
               const mferX = pm.scene.position.x;
-              if (truckFrontX >= mferX - 0.5) {
+              const mferZ = pm.scene.position.z + modelCenter.z * modelScale;
+              const zDist = Math.abs(mferZ - truckZ);
+              if (truckFrontX >= mferX - 0.5 && zDist < truckHalfW + 0.5) {
                 if (pm.mixer) pm.mixer.stopAllAction();
                 const mfer = createRagdoll(pm.scene);
                 if (mfer) {
