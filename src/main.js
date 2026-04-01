@@ -4,7 +4,10 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 
 const MODEL_URL = 'https://sfo3.digitaloceanspaces.com/cybermfers/cybermfers/builders/mfermashup.glb';
-const DROP_HEIGHT = 7;
+
+// Tunable settings (updated by UI sliders)
+const DEFAULTS = { gravity: 15, launchSpeed: 2, spin: 6, bounce: 0.3, damping: 2, dropHeight: 7 };
+const settings = { ...DEFAULTS };
 
 // Trait-to-mesh mapping (from avatar-maker TRAIT_MESH_MAPPING)
 const TRAIT_MESH_MAPPING = {
@@ -333,20 +336,13 @@ function traitsToMeshes(traits) {
   return meshes;
 }
 
-let currentMeshes = new Set();
-
-function applyMferAppearance() {
+function applyRandomAppearance(targetScene) {
   const traits = generateRandomTraits();
-  currentMeshes = traitsToMeshes(traits);
+  const meshes = traitsToMeshes(traits);
   console.log('Random mfer:', traits.type, '| traits:', Object.keys(traits).length);
-
-  if (gltfScene) {
-    gltfScene.traverse((child) => {
-      if (child.isMesh) {
-        child.visible = currentMeshes.has(child.name);
-      }
-    });
-  }
+  targetScene.traverse((child) => {
+    if (child.isMesh) child.visible = meshes.has(child.name);
+  });
 }
 
 // Ragdoll segment definitions: each maps a bone pair to a physics body
@@ -389,9 +385,9 @@ const SEGMENT_ORDER = [
 
 let scene, camera, renderer;
 let world;
-let gltfScene, mixer;
-let obstacleParts = []; // { body, mesh }
-let dropped = false;
+let gltfScene, mixer;       // the idle display mfer
+let originalGltf = null;     // stored for cloning new mfers
+let obstacleParts = [];
 let modelScale = 1;
 let modelCenter = new THREE.Vector3();
 let modelBottomY = 0;
@@ -401,15 +397,11 @@ let impactScore = 0;
 let maxVelocity = 0;
 let settled = false;
 let settledTimer = 0;
-
-// Ragdoll state
-let ragdollBodies = {};       // { segName: RigidBody }
-let ragdollJointRefs = [];    // ImpulseJoint references
-let ragdollSegData = {};      // { segName: { bone, halfDist, localRotOffset } }
-let debugMeshes = [];         // wireframe physics helpers
 let showDebug = false;
-let ragdollActive = false;    // false = rigid falling, true = floppy after impact
 let eventQueue;
+
+// All dropped mfers (each has: scene, ragdollBodies, ragdollJointRefs, ragdollSegData, ragdollActive, debugMeshes)
+let mfers = [];
 
 async function init() {
   await RAPIER.init();
@@ -449,7 +441,7 @@ async function init() {
   scene.add(rim);
 
   // Physics
-  world = new RAPIER.World({ x: 0, y: -15, z: 0 });
+  world = new RAPIER.World({ x: 0, y: -settings.gravity, z: 0 });
   eventQueue = new RAPIER.EventQueue(true);
 
   createGround();
@@ -461,12 +453,61 @@ async function init() {
   window.addEventListener('keydown', (e) => {
     if (e.key === 'd' || e.key === 'D') {
       showDebug = !showDebug;
-      for (const d of debugMeshes) d.mesh.visible = showDebug;
+      for (const m of mfers) for (const d of m.debugMeshes) d.mesh.visible = showDebug;
     }
   });
   document.getElementById('reset-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     reset();
+  });
+
+  // Settings panel toggle
+  const controlsEl = document.getElementById('controls');
+  const toggleBtn = document.getElementById('toggle-controls');
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = controlsEl.style.display !== 'none';
+    controlsEl.style.display = open ? 'none' : 'block';
+    toggleBtn.textContent = open ? 'settings' : 'x';
+  });
+  controlsEl.addEventListener('click', (e) => e.stopPropagation());
+  controlsEl.addEventListener('touchstart', (e) => e.stopPropagation());
+
+  // Wire up sliders
+  const sliders = [
+    { id: 'gravity',  key: 'gravity',     apply: (v) => world.gravity = { x: 0, y: -v, z: 0 } },
+    { id: 'launch',   key: 'launchSpeed' },
+    { id: 'spin',     key: 'spin' },
+    { id: 'bounce',   key: 'bounce' },
+    { id: 'damping',  key: 'damping' },
+    { id: 'height',   key: 'dropHeight',  apply: (v) => {
+      if (gltfScene) {
+        gltfScene.position.y = v;
+        originalPos.copy(gltfScene.position);
+      }
+    }},
+  ];
+  for (const sl of sliders) {
+    const input = document.getElementById(`sl-${sl.id}`);
+    const valEl = document.getElementById(`v-${sl.id}`);
+    input.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      settings[sl.key] = v;
+      valEl.textContent = v % 1 === 0 ? v : v.toFixed(1);
+      if (sl.apply) sl.apply(v);
+    });
+  }
+  document.getElementById('defaults-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    Object.assign(settings, DEFAULTS);
+    for (const sl of sliders) {
+      const input = document.getElementById(`sl-${sl.id}`);
+      const valEl = document.getElementById(`v-${sl.id}`);
+      const v = settings[sl.key];
+      input.value = v;
+      valEl.textContent = v % 1 === 0 ? v : v.toFixed(1);
+      if (sl.apply) sl.apply(v);
+    }
   });
 
   document.getElementById('loading').style.display = 'none';
@@ -554,6 +595,7 @@ async function loadModel() {
 
   return new Promise((resolve, reject) => {
     loader.load(MODEL_URL, (gltf) => {
+      originalGltf = gltf;
       const cloned = SkeletonUtils.clone(gltf.scene);
       gltfScene = cloned;
 
@@ -568,7 +610,7 @@ async function loadModel() {
       });
 
       // Apply random mfer appearance before measuring
-      applyMferAppearance();
+      applyRandomAppearance(cloned);
 
       // Update matrices before measuring
       cloned.updateMatrixWorld(true);
@@ -598,7 +640,7 @@ async function loadModel() {
       const stairTopX = -1;
       cloned.position.set(
         stairTopX - modelCenter.x * modelScale,
-        DROP_HEIGHT,
+        settings.dropHeight,
         -modelCenter.z * modelScale
       );
       originalPos.copy(cloned.position);
@@ -632,15 +674,17 @@ async function loadModel() {
   });
 }
 
-function createRagdoll() {
-  if (!gltfScene) return;
+function createRagdoll(targetScene) {
+  if (!targetScene) return null;
+
+  const mfer = { scene: targetScene, ragdollBodies: {}, ragdollJointRefs: [], ragdollSegData: {}, ragdollActive: false, debugMeshes: [] };
 
   // Ensure skeleton world matrices are current
-  gltfScene.updateMatrixWorld(true);
+  targetScene.updateMatrixWorld(true);
 
   // Build bone lookup
   const bones = {};
-  gltfScene.traverse((child) => {
+  targetScene.traverse((child) => {
     if (child.isBone) bones[child.name] = child;
   });
 
@@ -682,8 +726,8 @@ function createRagdoll() {
     const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(center.x, center.y, center.z)
       .setRotation({ x: bodyQuat.x, y: bodyQuat.y, z: bodyQuat.z, w: bodyQuat.w })
-      .setLinearDamping(0.3)
-      .setAngularDamping(0.5)
+      .setLinearDamping(settings.damping)
+      .setAngularDamping(settings.damping + 0.2)
       .setCcdEnabled(true);
     const body = world.createRigidBody(bodyDesc);
 
@@ -697,14 +741,14 @@ function createRagdoll() {
     }
     colliderDesc
       .setMass(seg.mass)
-      .setRestitution(0.3)
+      .setRestitution(settings.bounce)
       .setFriction(0.5)
       .setCollisionGroups(ragdollGroup)
       .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
     world.createCollider(colliderDesc, body);
 
-    ragdollBodies[seg.name] = body;
-    ragdollSegData[seg.name] = { bone, halfDist, localRotOffset };
+    mfer.ragdollBodies[seg.name] = body;
+    mfer.ragdollSegData[seg.name] = { bone, halfDist, localRotOffset };
 
     // Debug wireframe visualization
     let debugGeom;
@@ -717,16 +761,16 @@ function createRagdoll() {
     const debugMesh = new THREE.Mesh(debugGeom, new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }));
     debugMesh.visible = showDebug;
     scene.add(debugMesh);
-    debugMeshes.push({ mesh: debugMesh, segName: seg.name });
+    mfer.debugMeshes.push({ mesh: debugMesh, segName: seg.name });
   }
 
   // Create joints between segments
   for (const jDef of RAGDOLL_JOINTS) {
-    const bodyA = ragdollBodies[jDef.segA];
-    const bodyB = ragdollBodies[jDef.segB];
+    const bodyA = mfer.ragdollBodies[jDef.segA];
+    const bodyB = mfer.ragdollBodies[jDef.segB];
     if (!bodyA || !bodyB) continue;
 
-    const segDataB = ragdollSegData[jDef.segB];
+    const segDataB = mfer.ragdollSegData[jDef.segB];
 
     // The shared connection point is segB's bone position
     const sharedPos = new THREE.Vector3();
@@ -753,129 +797,157 @@ function createRagdoll() {
       { x: anchorB.x, y: anchorB.y, z: anchorB.z }
     );
     const joint = world.createImpulseJoint(jointData, bodyA, bodyB, true);
-    ragdollJointRefs.push(joint);
+    mfer.ragdollJointRefs.push(joint);
   }
 
   // Apply uniform velocity to all bodies — they fall as a rigid unit until first impact
-  ragdollActive = false;
-  const initVel = { x: 1.5 + Math.random(), y: -2, z: (Math.random() - 0.5) * 2 };
-  for (const body of Object.values(ragdollBodies)) {
+  const initVel = { x: settings.launchSpeed * (0.75 + Math.random() * 0.5), y: -2, z: (Math.random() - 0.5) * 2 };
+  for (const body of Object.values(mfer.ragdollBodies)) {
     body.setLinvel(initVel, true);
     body.setAngvel({ x: 0, y: 0, z: 0 }, true);
   }
 
-  console.log(`Ragdoll created: ${Object.keys(ragdollBodies).length} bodies, ${ragdollJointRefs.length} joints`);
+  console.log(`Ragdoll created: ${Object.keys(mfer.ragdollBodies).length} bodies, ${mfer.ragdollJointRefs.length} joints`);
+  return mfer;
 }
 
-function syncRagdollBones() {
-  if (!gltfScene || Object.keys(ragdollBodies).length === 0) return;
+// Reusable temp objects for bone sync
+const _tp = new THREE.Vector3(), _tq = new THREE.Quaternion(), _bq = new THREE.Quaternion();
+const _off = new THREE.Vector3(), _pi = new THREE.Matrix4(), _dw = new THREE.Matrix4();
+const _lm = new THREE.Matrix4(), _lp = new THREE.Vector3(), _lq = new THREE.Quaternion(), _ls = new THREE.Vector3();
 
-  // Reusable temp objects
-  const targetPos = new THREE.Vector3();
-  const targetQuat = new THREE.Quaternion();
-  const bodyQuatThree = new THREE.Quaternion();
-  const offset = new THREE.Vector3();
-  const parentInv = new THREE.Matrix4();
-  const desiredWorld = new THREE.Matrix4();
-  const localMat = new THREE.Matrix4();
-  const lp = new THREE.Vector3();
-  const lq = new THREE.Quaternion();
-  const ls = new THREE.Vector3();
-  const scaleVec = new THREE.Vector3(modelScale, modelScale, modelScale);
+function syncRagdollBones(mfer) {
+  const sv = new THREE.Vector3(modelScale, modelScale, modelScale);
 
   for (const segName of SEGMENT_ORDER) {
-    const body = ragdollBodies[segName];
-    const seg = ragdollSegData[segName];
+    const body = mfer.ragdollBodies[segName];
+    const seg = mfer.ragdollSegData[segName];
     if (!body || !seg) continue;
 
     const p = body.translation();
     const r = body.rotation();
-    bodyQuatThree.set(r.x, r.y, r.z, r.w);
+    _bq.set(r.x, r.y, r.z, r.w);
 
-    // Bone position = body center + offset to bone end (in body local, bone is at -halfDist along Y)
-    offset.set(0, -seg.halfDist, 0).applyQuaternion(bodyQuatThree);
-    targetPos.set(p.x + offset.x, p.y + offset.y, p.z + offset.z);
+    _off.set(0, -seg.halfDist, 0).applyQuaternion(_bq);
+    _tp.set(p.x + _off.x, p.y + _off.y, p.z + _off.z);
+    _tq.copy(_bq).multiply(seg.localRotOffset);
 
-    // Bone rotation = bodyQuat * localRotOffset
-    targetQuat.copy(bodyQuatThree).multiply(seg.localRotOffset);
+    _pi.copy(seg.bone.parent.matrixWorld).invert();
+    _dw.compose(_tp, _tq, sv);
+    _lm.multiplyMatrices(_pi, _dw);
+    _lm.decompose(_lp, _lq, _ls);
 
-    // Compute local transform from desired world transform
-    // Use scale=modelScale so decomposed bone scale comes out as ~1
-    parentInv.copy(seg.bone.parent.matrixWorld).invert();
-    desiredWorld.compose(targetPos, targetQuat, scaleVec);
-    localMat.multiplyMatrices(parentInv, desiredWorld);
-    localMat.decompose(lp, lq, ls);
-
-    seg.bone.position.copy(lp);
-    seg.bone.quaternion.copy(lq);
-    // Don't touch bone.scale - decomposed scale should be ~1
-
-    // Update this bone and descendants so child segments have correct parent matrixWorld
+    seg.bone.position.copy(_lp);
+    seg.bone.quaternion.copy(_lq);
     seg.bone.updateMatrixWorld(true);
   }
 }
 
+function spawnAndDropMfer() {
+  if (!originalGltf) return;
+
+  const cloned = SkeletonUtils.clone(originalGltf.scene);
+
+  // Set up meshes
+  cloned.traverse((child) => {
+    if (child.isMesh) {
+      child.visible = false;
+      child.castShadow = true;
+      child.receiveShadow = true;
+      child.frustumCulled = false;
+    }
+  });
+  applyRandomAppearance(cloned);
+
+  // Match scale and position of idle mfer
+  cloned.scale.setScalar(modelScale);
+  cloned.position.copy(originalPos);
+  cloned.position.y = settings.dropHeight;
+
+  // Save bone rest transforms for this clone
+  cloned.traverse((child) => {
+    if (child.isBone) {
+      child.userData.origPos = child.position.clone();
+      child.userData.origQuat = child.quaternion.clone();
+      child.userData.origScale = child.scale.clone();
+    }
+  });
+
+  scene.add(cloned);
+
+  const mfer = createRagdoll(cloned);
+  if (mfer) mfers.push(mfer);
+}
+
 function onDrop(e) {
-  if (dropped) return;
   if (e.target.id === 'reset-btn') return;
-  dropped = true;
+
+  if (gltfScene) {
+    // First click: drop the idle mfer
+    if (mixer) mixer.stopAllAction();
+    const mfer = createRagdoll(gltfScene);
+    if (mfer) mfers.push(mfer);
+    gltfScene = null;
+    mixer = null;
+  } else {
+    // Subsequent clicks: spawn a new random mfer and drop it
+    spawnAndDropMfer();
+  }
+
   settled = false;
   settledTimer = 0;
   impactScore = 0;
   maxVelocity = 0;
-
-  if (mixer) mixer.stopAllAction();
-  createRagdoll();
 
   document.getElementById('instructions').textContent = '';
   document.getElementById('reset-btn').style.display = 'block';
 }
 
 function reset() {
-  // Clean up ragdoll bodies
-  for (const joint of ragdollJointRefs) {
-    world.removeImpulseJoint(joint, true);
+  // Clean up all mfers
+  for (const mfer of mfers) {
+    for (const joint of mfer.ragdollJointRefs) world.removeImpulseJoint(joint, true);
+    for (const body of Object.values(mfer.ragdollBodies)) world.removeRigidBody(body);
+    for (const d of mfer.debugMeshes) {
+      scene.remove(d.mesh);
+      d.mesh.geometry.dispose();
+      d.mesh.material.dispose();
+    }
+    scene.remove(mfer.scene);
   }
-  for (const body of Object.values(ragdollBodies)) {
-    world.removeRigidBody(body);
-  }
-  ragdollBodies = {};
-  ragdollJointRefs = [];
-  ragdollSegData = {};
+  mfers = [];
 
-  // Clean up debug meshes
-  for (const d of debugMeshes) {
-    scene.remove(d.mesh);
-    d.mesh.geometry.dispose();
-    d.mesh.material.dispose();
-  }
-  debugMeshes = [];
-
-  // Restore model
-  if (gltfScene) {
-    gltfScene.position.copy(originalPos);
-    gltfScene.rotation.set(0, 0, 0);
-    gltfScene.scale.setScalar(modelScale);
-
-    gltfScene.traverse((child) => {
-      if (child.isBone && child.userData.origPos) {
-        child.position.copy(child.userData.origPos);
-        child.quaternion.copy(child.userData.origQuat);
-        child.scale.copy(child.userData.origScale);
+  // Create fresh idle mfer
+  if (originalGltf) {
+    const cloned = SkeletonUtils.clone(originalGltf.scene);
+    cloned.traverse((child) => {
+      if (child.isMesh) {
+        child.visible = false;
+        child.castShadow = true;
+        child.receiveShadow = true;
+        child.frustumCulled = false;
       }
     });
+    applyRandomAppearance(cloned);
+    cloned.scale.setScalar(modelScale);
+    cloned.position.copy(originalPos);
+    cloned.position.y = settings.dropHeight;
+    cloned.traverse((child) => {
+      if (child.isBone) {
+        child.userData.origPos = child.position.clone();
+        child.userData.origQuat = child.quaternion.clone();
+        child.userData.origScale = child.scale.clone();
+      }
+    });
+    scene.add(cloned);
+    gltfScene = cloned;
 
-    // New random mfer each reset
-    applyMferAppearance();
+    mixer = new THREE.AnimationMixer(cloned);
+    const idle = originalGltf.animations.find(a => a.name.toLowerCase().includes('idle')) || originalGltf.animations[0];
+    if (idle) mixer.clipAction(idle).play();
   }
 
-  if (mixer) {
-    for (const action of mixer._actions) action.reset().play();
-  }
-
-  dropped = false;
   settled = false;
-  ragdollActive = false;
   document.getElementById('instructions').textContent = 'click to drop';
   document.getElementById('score').textContent = '';
   document.getElementById('reset-btn').style.display = 'none';
@@ -890,14 +962,14 @@ function onResize() {
 }
 
 function updateScore() {
-  const hipsBody = ragdollBodies['hips'];
-  if (!hipsBody) return;
+  const latest = mfers[mfers.length - 1];
+  if (!latest || !latest.ragdollBodies['hips']) return;
 
-  // Aggregate velocity across all bodies for richer scoring
+  // Aggregate velocity across latest mfer's bodies
   let totalSpeed = 0;
   let totalSpin = 0;
   let count = 0;
-  for (const body of Object.values(ragdollBodies)) {
+  for (const body of Object.values(latest.ragdollBodies)) {
     const v = body.linvel();
     const a = body.angvel();
     totalSpeed += Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
@@ -932,7 +1004,7 @@ function animate() {
   const delta = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
 
-  if (mixer && !dropped) mixer.update(delta);
+  if (mixer && gltfScene) mixer.update(delta);
 
   // Step physics with event queue for collision detection
   world.step(eventQueue);
@@ -945,52 +1017,56 @@ function animate() {
     mesh.quaternion.set(r.x, r.y, r.z, r.w);
   }
 
-  if (dropped && Object.keys(ragdollBodies).length > 0) {
+  // Process all mfers
+  let anyPreImpact = false;
+  for (const mfer of mfers) {
     // Pre-impact: keep all bodies in rigid formation
-    if (!ragdollActive) {
-      const hipsBody = ragdollBodies['hips'];
+    if (!mfer.ragdollActive) {
+      anyPreImpact = true;
+      const hipsBody = mfer.ragdollBodies['hips'];
       if (hipsBody) {
         const hv = hipsBody.linvel();
-        for (const body of Object.values(ragdollBodies)) {
+        for (const body of Object.values(mfer.ragdollBodies)) {
           body.setLinvel({ x: hv.x, y: hv.y, z: hv.z }, true);
           body.setAngvel({ x: 0, y: 0, z: 0 }, true);
         }
       }
-
-      // Check for first collision with environment to activate ragdoll
-      eventQueue.drainCollisionEvents((h1, h2, started) => {
-        if (started && !ragdollActive) {
-          ragdollActive = true;
-          // Add random spin on impact for fun tumbling
-          const hb = ragdollBodies['hips'];
-          if (hb) {
-            hb.setAngvel({ x: (Math.random() - 0.5) * 6, y: (Math.random() - 0.5) * 3, z: (Math.random() - 0.5) * 6 }, true);
-          }
-          console.log('Impact! Ragdoll activated');
-        }
-      });
-    } else {
-      // Drain events even when active (must be drained each frame)
-      eventQueue.drainCollisionEvents(() => {});
     }
 
-    // Sync ragdoll bones to physics bodies
-    syncRagdollBones();
+    // Sync ragdoll bones
+    syncRagdollBones(mfer);
 
     // Sync debug wireframes
-    for (const d of debugMeshes) {
-      const body = ragdollBodies[d.segName];
+    for (const d of mfer.debugMeshes) {
+      const body = mfer.ragdollBodies[d.segName];
       if (!body) continue;
       const p = body.translation();
       const r = body.rotation();
       d.mesh.position.set(p.x, p.y, p.z);
       d.mesh.quaternion.set(r.x, r.y, r.z, r.w);
     }
+  }
 
+  // Drain collision events — activate any pre-impact mfers on collision
+  eventQueue.drainCollisionEvents((h1, h2, started) => {
+    if (!started) return;
+    for (const mfer of mfers) {
+      if (mfer.ragdollActive) continue;
+      mfer.ragdollActive = true;
+      const hb = mfer.ragdollBodies['hips'];
+      if (hb) {
+        const s = settings.spin;
+        hb.setAngvel({ x: (Math.random() - 0.5) * s, y: (Math.random() - 0.5) * s * 0.5, z: (Math.random() - 0.5) * s }, true);
+      }
+    }
+  });
+
+  if (mfers.length > 0) {
     updateScore();
 
-    // Camera follows hips
-    const hipsBody = ragdollBodies['hips'];
+    // Camera follows latest mfer's hips
+    const latest = mfers[mfers.length - 1];
+    const hipsBody = latest.ragdollBodies['hips'];
     if (hipsBody) {
       const pos = hipsBody.translation();
       const vel = hipsBody.linvel();
@@ -1004,9 +1080,6 @@ function animate() {
       camera.position.z += (camTargetZ - camera.position.z) * 0.08;
       camera.lookAt(pos.x, pos.y, pos.z);
     }
-  } else {
-    // Drain events even when not dropped to prevent buildup
-    eventQueue.drainCollisionEvents(() => {});
   }
 
   renderer.render(scene, camera);
