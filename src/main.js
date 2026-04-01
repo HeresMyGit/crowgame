@@ -7,7 +7,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 const MODEL_URL = 'https://sfo3.digitaloceanspaces.com/cybermfers/cybermfers/builders/mfermashup.glb';
 
 // Tunable settings (updated by UI sliders)
-const DEFAULTS = { gravity: 15, launchSpeed: 2, spin: 6, bounce: 0.3, damping: 2, dropHeight: 7 };
+const DEFAULTS = { gravity: 15, launchSpeed: 2, spin: 6, bounce: 0.3, damping: 2, dropHeight: 7, stairCount: 30 };
 const settings = { ...DEFAULTS };
 
 // Trait-to-mesh mapping (from avatar-maker TRAIT_MESH_MAPPING)
@@ -522,6 +522,7 @@ let eventQueue;
 // Level system
 let levelParts = null;
 let currentLevelIndex = 0;
+let currentLevel = null;
 
 // Game phases: 'placing' (click to place, shift+drag to set height) → 'playing' (go pressed, physics active)
 let gamePhase = 'placing';
@@ -545,7 +546,7 @@ async function init() {
   scene.fog = new THREE.FogExp2(0x1a1a2e, 0.025);
 
   camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.set(0, 6, 14);
+  camera.position.set(0, 6, 14); // overridden after level build
   camera.lookAt(0, 4, 0);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -590,7 +591,11 @@ async function init() {
   world = new RAPIER.World({ x: 0, y: -settings.gravity, z: 0 });
   eventQueue = new RAPIER.EventQueue(true);
 
-  levelParts = LEVELS[0].build();
+  currentLevel = getLevel(0);
+  levelParts = currentLevel.build();
+  const cam = currentLevel.cameraStart;
+  camera.position.set(...cam.pos);
+  camera.lookAt(...cam.lookAt);
   await loadModel();
 
   ghostPreview = createGhostPreview();
@@ -658,6 +663,9 @@ async function init() {
     { id: 'spin',     key: 'spin' },
     { id: 'bounce',   key: 'bounce' },
     { id: 'damping',  key: 'damping' },
+    { id: 'stairs',   key: 'stairCount',  apply: () => {
+      if (currentLevelIndex === 0) switchLevel(0); // rebuild stair level
+    }},
     { id: 'height',   key: 'dropHeight',  apply: (v) => {
       if (gltfScene) {
         gltfScene.position.y = v;
@@ -678,7 +686,7 @@ async function init() {
   document.getElementById('defaults-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     Object.assign(settings, DEFAULTS);
-    if (LEVELS[currentLevelIndex].settingsOverrides) Object.assign(settings, LEVELS[currentLevelIndex].settingsOverrides);
+    if (currentLevel.settingsOverrides) Object.assign(settings, currentLevel.settingsOverrides);
     for (const sl of sliders) {
       const input = document.getElementById(`sl-${sl.id}`);
       const valEl = document.getElementById(`v-${sl.id}`);
@@ -741,48 +749,155 @@ function addDynamicBox(p, pos, size, color, mass = 1.5) {
 // ---- LEVEL 1: STAIR DISMOUNT ----
 
 function createStairLevel() {
+  // Compute dimensions from current settings each time
+  const N = settings.stairCount;
+  const stepH = 0.28, stepD = 0.5;
+  const totalH = N * stepH;
+  const totalD = N * stepD;
+  const topY = 1 + totalH + stepH;
+  const topX = totalD + 2;
+
   return {
     name: 'stairs',
-    spawnPos: { x: -1, y: 1, z: 0 },
+    spawnPos: { x: topX - 1, y: topY, z: 0 },
     groundY: 1,
-    cameraStart: { pos: [0, 6, 14], lookAt: [0, 4, 0] },
+    settingsOverrides: { damping: 0.3 },
+    cameraStart: { pos: [totalD * 0.3, totalH + 4, totalD * 0.8 + 12], lookAt: [totalD * 0.5, totalH * 0.35, 0] },
 
     build() {
       const p = { staticBodies: [], staticMeshes: [], dynamicParts: [], helpers: [], animatedObjects: [] };
 
-      // Ground
-      const ground = new THREE.Mesh(new THREE.PlaneGeometry(50, 50),
-        new THREE.MeshStandardMaterial({ color: 0x16213e, roughness: 0.8, metalness: 0.2 }));
+      // === GROUND ===
+      const groundSize = Math.max(60, totalD + 20);
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundSize, 40),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.85 }));
       ground.rotation.x = -Math.PI / 2;
       ground.receiveShadow = true;
       scene.add(ground);
       p.staticMeshes.push(ground);
 
-      const grid = new THREE.GridHelper(50, 50, 0x0f3460, 0x0f3460);
-      grid.position.y = 0.01;
-      scene.add(grid);
-      p.helpers.push(grid);
-
       const gb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0.5, 0));
-      world.createCollider(RAPIER.ColliderDesc.cuboid(25, 0.5, 25).setRestitution(0.4).setFriction(0.6), gb);
+      world.createCollider(RAPIER.ColliderDesc.cuboid(groundSize / 2, 0.5, 20).setRestitution(0.3).setFriction(0.7), gb);
       p.staticBodies.push(gb);
 
-      // Stairs
-      const stairCount = 8, stepW = 3, stepH = 0.35, stepD = 0.6;
-      for (let i = 0; i < stairCount; i++) {
-        addBox(p, { x: -1 + i * stepD * 0.8, y: (stairCount - i) * stepH, z: 0 },
-          { x: stepW, y: stepH, z: stepD }, 0x0f3460);
+      // Floor tiles around the base
+      const tileMat1 = new THREE.MeshStandardMaterial({ color: 0x1e2140, roughness: 0.8 });
+      const tileMat2 = new THREE.MeshStandardMaterial({ color: 0x252850, roughness: 0.8 });
+      for (let tx = -8; tx <= totalD + 10; tx += 2) {
+        for (let tz = -8; tz <= 8; tz += 2) {
+          const tile = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.02, 1.9),
+            (tx + tz) % 4 === 0 ? tileMat1 : tileMat2);
+          tile.position.set(tx, 1.01, tz);
+          tile.receiveShadow = true;
+          scene.add(tile);
+          p.staticMeshes.push(tile);
+        }
       }
 
-      // Ramp
-      addBox(p, { x: 5, y: 0.3, z: 0 }, { x: 3, y: 0.15, z: 2.5 }, 0xe94560,
-        { rotZ: -0.25, roughness: 0.5, restitution: 0.6, friction: 0.3 });
+      // === STAIRCASE ===
+      const stairMat = new THREE.MeshStandardMaterial({ color: 0x3a3a5c, roughness: 0.6, metalness: 0.1 });
+      const stepW = 10;
 
-      // Dynamic boxes
+      // Steps go from left (bottom) to right (top)
+      for (let i = 0; i < N; i++) {
+        const x = i * stepD;
+        const y = 1 + (i + 1) * stepH;
+        const stair = new THREE.Mesh(new THREE.BoxGeometry(stepD, stepH, stepW), stairMat);
+        stair.position.set(x, y, 0);
+        stair.castShadow = true;
+        stair.receiveShadow = true;
+        scene.add(stair);
+        p.staticMeshes.push(stair);
+        const sb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, 0));
+        world.createCollider(RAPIER.ColliderDesc.cuboid(stepD / 2, stepH / 2, stepW / 2).setRestitution(0.2).setFriction(0.6), sb);
+        p.staticBodies.push(sb);
+      }
+
+      // Top landing
+      addBox(p, { x: topX, y: topY, z: 0 }, { x: 5, y: 0.3, z: stepW }, 0x3a3a5c, { roughness: 0.6, friction: 0.6 });
+
+      // === RAILINGS ===
+      const railMat = new THREE.MeshStandardMaterial({ color: 0x888899, roughness: 0.3, metalness: 0.7 });
+      for (const zSide of [-stepW / 2 - 0.1, stepW / 2 + 0.1]) {
+        // Posts every 3 steps
+        for (let i = 0; i <= N; i += 3) {
+          const x = i * stepD;
+          const y = 1 + (i + 1) * stepH;
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.9, 0.08), railMat);
+          post.position.set(x, y + 0.45, zSide);
+          post.castShadow = true;
+          scene.add(post);
+          p.staticMeshes.push(post);
+        }
+        // Angled rail
+        const railStartX = 0, railEndX = N * stepD;
+        const railStartY = 1 + stepH + 0.9, railEndY = topY + 0.9;
+        const railLen = Math.sqrt((railEndX - railStartX) ** 2 + (railEndY - railStartY) ** 2);
+        const railAngle = Math.atan2(railEndY - railStartY, railEndX - railStartX);
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(railLen, 0.06, 0.06), railMat);
+        rail.position.set((railStartX + railEndX) / 2, (railStartY + railEndY) / 2, zSide);
+        rail.rotation.z = railAngle;
+        scene.add(rail);
+        p.staticMeshes.push(rail);
+        // Landing rail
+        const topRail = new THREE.Mesh(new THREE.BoxGeometry(5, 0.06, 0.06), railMat);
+        topRail.position.set(topX, topY + 0.9, zSide);
+        scene.add(topRail);
+        p.staticMeshes.push(topRail);
+      }
+
+      // === RAMP at bottom ===
+      addBox(p, { x: -5, y: 1.2, z: 0 }, { x: 4, y: 0.15, z: 4 }, 0xe94560,
+        { rotZ: 0.2, roughness: 0.5, restitution: 0.6, friction: 0.3 });
+
+      // === DYNAMIC OBJECTS at bottom ===
       for (let i = 0; i < 6; i++) {
-        const s = 0.25 + Math.random() * 0.4;
-        addDynamicBox(p, { x: 3 + Math.random() * 4, y: s / 2 + (Math.random() > 0.5 ? 0.35 : 0), z: -1.5 + Math.random() * 3 }, s, 0x533483);
+        const s = 0.3 + Math.random() * 0.4;
+        addDynamicBox(p, {
+          x: -4 + Math.random() * 6 - 3,
+          y: 1 + s / 2,
+          z: -3 + Math.random() * 6
+        }, s, 0x533483);
       }
+
+      // Barrels at the bottom
+      for (let i = 0; i < 4; i++) {
+        const s = 0.4;
+        const barrel = new THREE.Mesh(new THREE.BoxGeometry(s, s * 2, s),
+          new THREE.MeshStandardMaterial({ color: 0x664422, roughness: 0.7 }));
+        const bx = -6 + Math.random() * 4, bz = -2 + Math.random() * 4;
+        barrel.position.set(bx, 1 + s, bz);
+        barrel.castShadow = true;
+        barrel.receiveShadow = true;
+        scene.add(barrel);
+        const bb = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+          .setTranslation(bx, 1 + s, bz).setLinearDamping(0.4).setAngularDamping(0.4));
+        world.createCollider(RAPIER.ColliderDesc.cuboid(s / 2, s, s / 2).setMass(2).setRestitution(0.3).setFriction(0.5), bb);
+        p.dynamicParts.push({ mesh: barrel, body: bb });
+      }
+
+      // Potted plants on top landing
+      for (const pz of [-3.5, 3.5]) {
+        const pot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.5),
+          new THREE.MeshStandardMaterial({ color: 0x884422, roughness: 0.8 }));
+        pot.position.set(topX + 1.5, topY + 0.3, pz);
+        pot.castShadow = true;
+        scene.add(pot);
+        const potBody = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+          .setTranslation(topX + 1.5, topY + 0.3, pz).setLinearDamping(0.5).setAngularDamping(0.5));
+        world.createCollider(RAPIER.ColliderDesc.cuboid(0.25, 0.3, 0.25).setMass(3).setRestitution(0.2).setFriction(0.6), potBody);
+        p.dynamicParts.push({ mesh: pot, body: potBody });
+        const plant = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8),
+          new THREE.MeshStandardMaterial({ color: 0x2d5a27, roughness: 0.9 }));
+        plant.position.set(0, 0.5, 0);
+        pot.add(plant);
+      }
+
+      // Grid
+      const grid = new THREE.GridHelper(Math.max(40, totalD + 10), 40, 0x0f3460, 0x0f3460);
+      grid.position.y = 1.01;
+      scene.add(grid);
+      p.helpers.push(grid);
 
       return p;
     },
@@ -1089,7 +1204,8 @@ function createTruckHitLevel() {
   };
 }
 
-const LEVELS = [createStairLevel(), createTruckHitLevel()];
+const LEVEL_FACTORIES = [createStairLevel, createTruckHitLevel];
+function getLevel(i) { return LEVEL_FACTORIES[i](); }
 
 function cleanupLevel() {
   if (!levelParts) return;
@@ -1128,18 +1244,18 @@ function switchLevel(index) {
   cleanupLevel();
 
   currentLevelIndex = index;
-  const level = LEVELS[index];
-  levelParts = level.build();
+  currentLevel = getLevel(index);
+  levelParts = currentLevel.build();
 
   // Apply level settings overrides
-  if (level.settingsOverrides) Object.assign(settings, DEFAULTS, level.settingsOverrides);
+  if (currentLevel.settingsOverrides) Object.assign(settings, DEFAULTS, currentLevel.settingsOverrides);
 
   // Set spawn position
-  const sp = level.spawnPos;
-  originalPos.set(sp.x - modelCenter.x * modelScale, sp.y, -modelCenter.z * modelScale);
+  const sp = currentLevel.spawnPos;
+  originalPos.set(sp.x - modelCenter.x * modelScale, sp.y, sp.z - modelCenter.z * modelScale);
 
   // Camera
-  const cam = level.cameraStart;
+  const cam = currentLevel.cameraStart;
   camera.position.set(...cam.pos);
   camera.lookAt(...cam.lookAt);
 
@@ -1217,7 +1333,7 @@ async function loadModel() {
       console.log('Scale:', modelScale.toFixed(2));
 
       // Position from level's spawn point
-      const sp = LEVELS[currentLevelIndex].spawnPos;
+      const sp = currentLevel.spawnPos;
       cloned.position.set(
         sp.x - modelCenter.x * modelScale,
         sp.y,
@@ -1385,10 +1501,16 @@ function createRagdoll(targetScene) {
 }
 
 function applyLaunchVelocity(mfer) {
-  const vel = { x: settings.launchSpeed * (0.75 + Math.random() * 0.5), y: -2, z: (Math.random() - 0.5) * 2 };
+  // Strong push down the stairs (negative X) with forward tumble
+  const speed = settings.launchSpeed * (4.5 + Math.random() * 3);
+  const vel = {
+    x: -speed - 6,
+    y: -3,
+    z: (Math.random() - 0.5) * 4
+  };
   for (const body of Object.values(mfer.ragdollBodies)) {
     body.setLinvel(vel, true);
-    body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    body.setAngvel({ x: 0, y: 0, z: -(6 + Math.random() * 6) }, true);
   }
 }
 
@@ -1431,7 +1553,7 @@ function getClickWorldPos(e) {
   pointer.y = -(clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
 
-  const gy = LEVELS[currentLevelIndex].groundY ?? 1;
+  const gy = currentLevel.groundY ?? 1;
   const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gy);
   const hitPoint = new THREE.Vector3();
   if (!raycaster.ray.intersectPlane(plane, hitPoint)) return null;
@@ -1460,7 +1582,7 @@ function createGhostPreview() {
 }
 
 function getShiftHeight(e) {
-  const gy = LEVELS[currentLevelIndex].groundY ?? 1;
+  const gy = currentLevel.groundY ?? 1;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
   // Project the ghost's ground-level position to screen space to find baseline
@@ -1481,7 +1603,7 @@ function updateGhostPreview(e) {
   pointer.x = (clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
-  const gy = LEVELS[currentLevelIndex].groundY ?? 1;
+  const gy = currentLevel.groundY ?? 1;
   const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gy);
   const hit = new THREE.Vector3();
   if (raycaster.ray.intersectPlane(plane, hit)) {
@@ -1528,7 +1650,7 @@ function spawnIdleMfer(worldPos, rotationY) {
 }
 
 function activateAllMfers() {
-  const curLevel = LEVELS[currentLevelIndex];
+  const curLevel = currentLevel;
   const gy = curLevel.groundY ?? 1;
 
   // Move initial idle mfer into placedMfers
@@ -1553,6 +1675,8 @@ function activateAllMfers() {
       const mfer = createRagdoll(pm.scene);
       if (mfer) {
         applyLaunchVelocity(mfer);
+        mfer.ragdollActive = true;
+        mfer.detachAfter = performance.now() + 400; // detach after 400ms of falling
         mfers.push(mfer);
       }
     } else {
@@ -1631,7 +1755,7 @@ function onGo() {
   activateAllMfers();
 
   // Notify level (e.g. starts the truck)
-  const level = LEVELS[currentLevelIndex];
+  const level = currentLevel;
   if (level.onDrop && levelParts) level.onDrop(levelParts);
 }
 
@@ -1697,12 +1821,16 @@ function reset() {
   // Reset level-specific state (e.g. truck position)
   if (levelParts && levelParts.reset) levelParts.reset();
 
+  // Recalculate spawn position from current level (stair count may have changed)
+  const sp = currentLevel.spawnPos;
+  originalPos.set(sp.x - modelCenter.x * modelScale, sp.y, sp.z - modelCenter.z * modelScale);
+
   settled = false;
   document.getElementById('instructions').textContent = 'click to place, shift+drag to set height';
   document.getElementById('score').textContent = '';
   document.getElementById('reset-btn').style.display = 'none';
   document.getElementById('go-btn').style.display = 'block';
-  const cam = LEVELS[currentLevelIndex].cameraStart;
+  const cam = currentLevel.cameraStart;
   camera.position.set(...cam.pos);
   camera.lookAt(...cam.lookAt);
 }
@@ -1837,9 +1965,16 @@ function animate() {
         hitStanding.add(pm);
       }
     }
+    // Deferred accessory detach (launched mfers — detach after timer)
+    const now = performance.now();
+    for (const mfer of mfers) {
+      if (mfer.detachAfter && now >= mfer.detachAfter) {
+        mfer.detachAfter = null;
+        detachAccessories(mfer);
+      }
+    }
     // Level-specific collision handling
-    const level = LEVELS[currentLevelIndex];
-    if (level.onCollision && levelParts) level.onCollision(levelParts, h1, h2);
+    if (currentLevel.onCollision && levelParts) currentLevel.onCollision(levelParts, h1, h2);
   });
   // Convert hit standing mfers to ragdolls
   for (const pm of hitStanding) {
