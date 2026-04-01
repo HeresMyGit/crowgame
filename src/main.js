@@ -1116,6 +1116,33 @@ function createTruckHitLevel() {
               carBody.setNextKinematicTranslation({ x: carState.currentX, y: 1.5, z: cd.z });
               const t = carBody.translation();
               carGroup.position.set(t.x, t.y, t.z);
+              // Hit placed mfers in the car's path
+              const carFrontX = carState.currentX + cd.dir * 1.5;
+              const carHalfW = 1.0;
+              const still = [];
+              for (const pm of placedMfers) {
+                const mx = pm.scene.position.x + modelCenter.x * modelScale;
+                const mz = pm.scene.position.z + modelCenter.z * modelScale;
+                const zDist = Math.abs(mz - cd.z);
+                const xHit = cd.dir > 0 ? (carFrontX >= mx - 0.5) : (carFrontX <= mx + 0.5);
+                if (xHit && zDist < carHalfW + 0.5) {
+                  if (pm.mixer) pm.mixer.stopAllAction();
+                  const mfer = createRagdoll(pm.scene);
+                  if (mfer) {
+                    for (const body of Object.values(mfer.ragdollBodies)) {
+                      body.setLinvel({ x: cd.dir * carState.speed * 0.6 + (Math.random() - 0.5) * 2, y: 3 + Math.random() * 3, z: (Math.random() - 0.5) * 5 }, true);
+                      body.setAngvel({ x: (Math.random() - 0.5) * 10, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 10 }, true);
+                    }
+                    mfer.ragdollActive = true;
+                    detachAccessories(mfer);
+                    mfers.push(mfer);
+                  }
+                } else {
+                  still.push(pm);
+                }
+              }
+              placedMfers = still;
+
               // Stop driving after passing through
               if ((cd.dir > 0 && carState.currentX > 25) || (cd.dir < 0 && carState.currentX < -25)) {
                 carState.hitSomething = true;
