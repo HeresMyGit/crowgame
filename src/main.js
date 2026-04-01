@@ -7,7 +7,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 const MODEL_URL = 'https://sfo3.digitaloceanspaces.com/cybermfers/cybermfers/builders/mfermashup.glb';
 
 // Tunable settings (updated by UI sliders)
-const DEFAULTS = { gravity: 15, launchSpeed: 2, spin: 6, bounce: 0.3, damping: 2, dropHeight: 7, stairCount: 30, pachinkoDensity: 5 };
+const DEFAULTS = { gravity: 15, launchSpeed: 2, spin: 6, bounce: 0.3, damping: 2, dropHeight: 7, stairCount: 30, pachinkoDensity: 5, timeScale: 100 };
 const settings = { ...DEFAULTS };
 
 // Trait-to-mesh mapping (from avatar-maker TRAIT_MESH_MAPPING)
@@ -703,6 +703,7 @@ async function init() {
     { id: 'spin',     key: 'spin' },
     { id: 'bounce',   key: 'bounce' },
     { id: 'damping',  key: 'damping' },
+    { id: 'timescale', key: 'timeScale', format: v => v + '%' },
     { id: 'stairs',   key: 'stairCount',  apply: () => {
       if (currentLevelIndex === 0) switchLevel(0);
     }},
@@ -722,7 +723,7 @@ async function init() {
     input.addEventListener('input', (e) => {
       const v = parseFloat(e.target.value);
       settings[sl.key] = v;
-      valEl.textContent = v % 1 === 0 ? v : v.toFixed(1);
+      valEl.textContent = sl.format ? sl.format(v) : (v % 1 === 0 ? v : v.toFixed(1));
       if (sl.apply) sl.apply(v);
     });
   }
@@ -735,7 +736,7 @@ async function init() {
       const valEl = document.getElementById(`v-${sl.id}`);
       const v = settings[sl.key];
       input.value = v;
-      valEl.textContent = v % 1 === 0 ? v : v.toFixed(1);
+      valEl.textContent = sl.format ? sl.format(v) : (v % 1 === 0 ? v : v.toFixed(1));
       if (sl.apply) sl.apply(v);
     }
   });
@@ -2630,14 +2631,23 @@ function animate() {
   requestAnimationFrame(animate);
 
   const now = performance.now();
-  const delta = Math.min((now - lastTime) / 1000, 0.05);
+  const rawDelta = Math.min((now - lastTime) / 1000, 0.05);
+  const delta = rawDelta * (settings.timeScale / 100);
   lastTime = now;
 
   if (mixer && gltfScene) mixer.update(delta);
   for (const pm of placedMfers) { if (pm.mixer) pm.mixer.update(delta); }
 
-  // Step physics with event queue for collision detection
-  world.step(eventQueue);
+  // Step physics with time scaling
+  const timeScale = settings.timeScale / 100;
+  if (timeScale <= 1) {
+    world.timestep = (1 / 60) * timeScale;
+    world.step(eventQueue);
+  } else {
+    world.timestep = 1 / 60;
+    const steps = Math.round(timeScale);
+    for (let i = 0; i < steps; i++) world.step(eventQueue);
+  }
 
   // Sync level dynamic parts to physics
   if (levelParts) {
