@@ -346,20 +346,25 @@ function applyRandomAppearance(targetScene) {
   });
 }
 
-// Map accessory mesh names to which ragdoll segment drives their velocity when detached
+// Map accessory mesh names to which ragdoll segment drives their velocity when detached.
+// Returns null for meshes that should stay on the body (hair, body, eyes, mouth, shirts, beard).
 function getDetachSegment(name) {
+  // Headphones
   if (name.startsWith('headphones'))  return 'head';
-  if (name.startsWith('eyes_glasses') || name.startsWith('eyes_vr') || name.startsWith('eyes_eye') ||
+  // Eyewear (glasses, VR, eyepatch, eye mask, 3D glasses) — NOT the eyeballs themselves
+  if (name.startsWith('eyes_glasses') || name.startsWith('eyes_vr') || name.startsWith('eyes_eye_') ||
       name.startsWith('eyes_glases_3d') || name.startsWith('eyes_glasses_3d')) return 'head';
+  // Hats (all types)
   if (name.startsWith('hat_') || name.startsWith('cap_') || name.startsWith('headband_')) return 'head';
-  if (name.startsWith('smoke'))       return 'head';
-  if (name.startsWith('watch_'))      return 'leftForeArm';
-  if (name.startsWith('chain_'))      return 'spine';
-  if (name.startsWith('beard'))       return 'head';
-  if (name.startsWith('hair_'))       return 'head';
-  if (name.startsWith('shirt_hoodie_up')) return 'head';
   if (name.startsWith('larmf'))       return 'head'; // larva mfer hat
-  return null; // body, type, eyes (actual eyeballs), mouth — don't detach
+  // Smoke / pipes
+  if (name.startsWith('smoke'))       return 'head';
+  // Watch
+  if (name.startsWith('watch_'))      return 'leftForeArm';
+  // Chain
+  if (name.startsWith('chain_'))      return 'spine';
+  // Keep on body: hair, beard, body, type, eyes (eyeballs), mouth, shirts, hoodie_up, shoes/gloves
+  return null;
 }
 
 function detachAccessories(mfer) {
