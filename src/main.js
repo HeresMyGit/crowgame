@@ -6,14 +6,348 @@ import RAPIER from '@dimforge/rapier3d-compat';
 const MODEL_URL = 'https://sfo3.digitaloceanspaces.com/cybermfers/cybermfers/builders/mfermashup.glb';
 const DROP_HEIGHT = 7;
 
-// Default mfer trait meshes to show
-const DEFAULT_MESHES = new Set([
-  'type_plain', 'body', 'heres_my_signature',
-  'eyes_normal',
-  'mouth_flat',
-  'headphones_black',
-  'smoke_cig_white', 'smoke',
-]);
+// Trait-to-mesh mapping (from avatar-maker TRAIT_MESH_MAPPING)
+const TRAIT_MESH_MAPPING = {
+  type: {
+    plain:    ['type_plain', 'body', 'heres_my_signature'],
+    charcoal: ['type_charcoal', 'body', 'heres_my_signature'],
+    zombie:   ['type_zombie', 'body', 'heres_my_signature'],
+    ape:      ['type_ape', 'body', 'heres_my_signature'],
+    alien:    ['type_alien', 'body', 'heres_my_signature'],
+    metal:    ['type_metal', 'body_metal', 'heres_my_signature'],
+    based:    ['type_based_mfer', 'body_mfercoin', 'heres_my_signature'],
+  },
+  eyes: {
+    regular:       ['eyes_normal'],
+    vr:            ['eyes_normal', 'eyes_vr', 'eyes_vr_lense'],
+    shades:        ['eyes_normal', 'eyes_glasses', 'eyes_glasses_shades'],
+    purple_shades: ['eyes_normal', 'eyes_glasses', 'eyes_glasses_purple'],
+    nerd:          ['eyes_normal', 'eyes_glasses', 'eyes_glasses_nerd'],
+    trippy:        ['eyes_normal', 'eyes_glasses', 'eyes_glasses_shades_s34n'],
+    matrix:        ['eyes_normal', 'eyes_glasses', 'eyes_glasses_shades_matrix'],
+    '3d':          ['eyes_normal', 'eyes_glases_3d', 'eyes_glasses_3d_lenses', 'eyes_glases_3d_rim'],
+    eye_mask:      ['eyes_normal', 'eyes_eye_mask'],
+    eyepatch:      ['eyes_normal', 'eyes_eye_patch'],
+    metal:         ['eyes_metal'],
+    mfercoin:      ['eyes_mfercoin'],
+    red:           ['eyes_red'],
+    alien:         ['eyes_alien'],
+    zombie:        ['eyes_zombie'],
+  },
+  mouth: {
+    smile: ['mouth_smile'],
+    flat:  ['mouth_flat'],
+  },
+  headphones: {
+    white:        ['headphones_white'],
+    red:          ['headphones_red'],
+    green:        ['headphones_green'],
+    pink:         ['headphones_pink'],
+    gold:         ['headphones_gold'],
+    blue:         ['headphones_blue'],
+    black:        ['headphones_black'],
+    lined:        ['headphones_lined'],
+    black_square: ['headphones_square_black'],
+    blue_square:  ['headphones_square_blue'],
+    gold_square:  ['headphones_square_gold'],
+  },
+  hat_over_headphones: {
+    cowboy:       ['hat_cowboy_hat'],
+    top:          ['hat_tophat', 'hat_tophat_red'],
+    pilot:        ['hat_pilot_cap', 'hat_pilot_cap_rims', 'hat_pilot_cap_glasses'],
+    hoodie_gray:  ['shirt_hoodie_up_dark_gray', 'shirt_hoodie_dark_gray'],
+    hoodie_pink:  ['shirt_hoodie_up_pink', 'shirt_hoodie_pink'],
+    hoodie_red:   ['shirt_hoodie_up_red', 'shirt_hoodie_red'],
+    hoodie_blue:  ['shirt_hoodie_up_blue', 'shirt_hoodie_blue'],
+    hoodie_white: ['shirt_hoodie_up_white', 'shirt_hoodie_white'],
+    hoodie_green: ['shirt_hoodie_up_green', 'shirt_hoodie_green'],
+    larva_mfer:   ['larmf-lowpoly', 'larmf-lowpoly_1', 'larmf-lowpoly_2', 'larmf-lowpoly_3', 'larmf-lowpoly_4', 'larmf-lowpoly_5', 'larmf-lowpoly_6'],
+  },
+  hat_under_headphones: {
+    bandana_dark_gray:    ['hat_bandana_dark_gray'],
+    bandana_red:          ['hat_bandana_red'],
+    bandana_blue:         ['hat_bandana_blue'],
+    knit_kc:              ['hat_knit_kc'],
+    knit_las_vegas:       ['hat_knit_las_vegas'],
+    knit_new_york:        ['hat_knit_new_york'],
+    knit_san_fran:        ['hat_knit_san_fran'],
+    knit_miami:           ['hat_knit_miami'],
+    knit_chicago:         ['hat_knit_chicago'],
+    knit_atlanta:         ['hat_knit_atlanta'],
+    knit_cleveland:       ['hat_knit_cleveland'],
+    knit_dallas:          ['hat_knit_dallas'],
+    knit_baltimore:       ['hat_knit_baltimore'],
+    knit_buffalo:         ['hat_knit_buffalo'],
+    knit_pittsburgh:      ['hat_knit_pittsburgh'],
+    cap_monochrome:       ['cap_monochrome'],
+    cap_based_blue:       ['cap_based_blue'],
+    cap_purple:           ['cap_purple'],
+    beanie_monochrome:    ['hat_beanie_monochrome'],
+    beanie:               ['hat_beanie'],
+    headband_blue_green:  ['headband_blue_green'],
+    headband_green_white: ['headband_green_white'],
+    headband_blue_red:    ['headband_blue_red'],
+    headband_pink_white:  ['headband_pink_white'],
+    headband_blue_white:  ['headband_blue_white'],
+  },
+  short_hair: {
+    mohawk_purple: ['hair_short_mohawk_purple'],
+    mohawk_red:    ['hair_short_mohawk_red'],
+    mohawk_pink:   ['hair_short_mohawk_pink'],
+    mohawk_black:  ['hair_short_mohawk_black'],
+    mohawk_yellow: ['hair_short_mohawk_yellow'],
+    mohawk_green:  ['hair_short_mohawk_green'],
+    mohawk_blue:   ['hair_short_mohawk_blue'],
+    messy_black:   ['hair_short_messy_black'],
+    messy_yellow:  ['hair_short_messy_yellow'],
+    messy_red:     ['hair_short_messy_red'],
+    messy_purple:  ['hair_short_messy_purple'],
+    messy_black_ape:   ['hair_short_messy_black_ape'],
+    messy_yellow_ape:  ['hair_short_messy_yellow_ape'],
+    messy_red_ape:     ['hair_short_messy_red_ape'],
+    messy_purple_ape:  ['hair_short_messy_purple_ape'],
+  },
+  long_hair: {
+    long_yellow: ['hair_long_light'],
+    long_black:  ['hair_long_dark'],
+    long_curly:  ['hair_long_curly'],
+  },
+  shirt: {
+    collared_pink:      ['shirt_collared_pink'],
+    collared_green:     ['shirt_collared_green'],
+    collared_yellow:    ['shirt_collared_yellow'],
+    collared_white:     ['shirt_collared_white'],
+    collared_turquoise: ['shirt_collared_turquoise'],
+    collared_blue:      ['shirt_collared_blue'],
+    hoodie_down_red:    ['shirt_hoodie_down_red', 'shirt_hoodie_red'],
+    hoodie_down_pink:   ['shirt_hoodie_down_pink', 'shirt_hoodie_pink'],
+    hoodie_down_white:  ['shirt_hoodie_down_white', 'shirt_hoodie_white'],
+    hoodie_down_green:  ['shirt_hoodie_down_green', 'shirt_hoodie_green'],
+    hoodie_down_gray:   ['shirt_hoodie_down_dark_gray', 'shirt_hoodie_dark_gray'],
+    hoodie_down_blue:   ['shirt_hoodie_down_blue', 'shirt_hoodie_blue'],
+  },
+  watch: {
+    sub_blue:          ['watch_sub_blue', 'watch_sub_strap_white'],
+    sub_lantern_green: ['watch_sub_lantern_green', 'watch_sub_strap_white'],
+    sub_cola:          ['watch_sub_cola_blue_red', 'watch_sub_strap_white'],
+    sub_turquoise:     ['watch_sub_turquoise', 'watch_sub_strap_white'],
+    sub_bat:           ['watch_sub_bat_blue_black', 'watch_sub_strap_white'],
+    sub_black:         ['watch_sub_black', 'watch_sub_strap_white'],
+    sub_rose:          ['watch_sub_rose', 'watch_sub_strap_white'],
+    sub_red:           ['watch_sub_red', 'watch_sub_strap_gray'],
+    oyster_silver:     ['watch_oyster_silver', 'watch_sub_strap_white'],
+    oyster_gold:       ['watch_oyster_gold', 'watch_sub_strap_gold'],
+    argo_white:        ['watch_argo_white'],
+    argo_black:        ['watch_argo_black'],
+    timex:             ['watch_timex'],
+  },
+  chain: {
+    silver:  ['chain_silver'],
+    gold:    ['chain_gold'],
+    onchain: ['chain_onchain'],
+  },
+  beard: {
+    full: ['beard'],
+    flat: ['beard_flat'],
+  },
+  smoke: {
+    pipe:       ['smoke_pipe'],
+    pipe_brown: ['smoke_pipe_brown'],
+    cig_white:  ['smoke_cig_white', 'smoke'],
+    cig_black:  ['smoke_cig_black', 'smoke'],
+  },
+  shoes_and_gloves: {
+    green:     ['accessories_christmas_green'],
+    graveyard: ['accessories_christmas_graveyard'],
+    red:       ['accessories_christmas_red'],
+    tree:      ['accessories_christmas_tree'],
+    teal:      ['accessories_christmas_teal'],
+    turquoise: ['accessories_christmas_turquoise'],
+    purple:    ['accessories_christmas_purple'],
+    space:     ['accessories_christmas_space'],
+    orange:    ['accessories_christmas_orange'],
+    blue:      ['accessories_christmas_blue'],
+    yellow:    ['accessories_christmas_yellow'],
+  },
+};
+
+// Eye base mesh per body type (replaces 'eyes_normal' in eye accessory meshes)
+const TYPE_EYE_BASE = {
+  metal: 'eyes_metal', based: 'eyes_mfercoin', zombie: 'eyes_zombie', alien: 'eyes_alien',
+};
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function getRandomType() {
+  const r = Math.random() * 100;
+  if (r < 30) return 'plain';
+  if (r < 60) return 'charcoal';
+  if (r < 74) return 'zombie';
+  if (r < 86) return 'ape';
+  if (r < 96) return 'alien';
+  if (r < 98) return 'based';
+  return 'metal';
+}
+
+function generateRandomTraits() {
+  const t = {};
+
+  // Required traits
+  t.type = getRandomType();
+  t.eyes = pick(['regular', 'vr', 'shades', 'purple_shades', 'nerd', 'trippy', 'matrix', '3d', 'eye_mask', 'eyepatch']);
+  t.mouth = pick(['flat', 'smile']);
+  t.headphones = pick(Object.keys(TRAIT_MESH_MAPPING.headphones));
+
+  // Optional traits (80% chance, 95% for shoes_and_gloves)
+  const optional = ['hat_over_headphones', 'hat_under_headphones', 'short_hair', 'long_hair', 'shirt', 'watch', 'chain', 'beard', 'smoke', 'shoes_and_gloves'];
+  for (const cat of optional) {
+    const chance = cat === 'shoes_and_gloves' ? 0.95 : 0.8;
+    if (Math.random() < chance) {
+      let opts = Object.keys(TRAIT_MESH_MAPPING[cat]);
+      if (cat === 'short_hair') opts = opts.filter(o => !o.includes('_ape'));
+      t[cat] = pick(opts);
+    }
+  }
+
+  // --- Compatibility rules (same order as avatar-maker) ---
+
+  // Rule 1: hat_over + hat_under conflict
+  if (t.hat_over_headphones && t.hat_under_headphones) {
+    const isHoodieUp = t.hat_over_headphones.startsWith('hoodie_');
+    const isBeanie = t.hat_under_headphones.startsWith('beanie');
+    if (isHoodieUp && isBeanie) {
+      delete t.hat_under_headphones;
+    } else {
+      Math.random() < 0.5 ? delete t.hat_over_headphones : delete t.hat_under_headphones;
+    }
+  }
+
+  // Rule 2: can't have both short and long hair
+  if (t.short_hair && t.long_hair) {
+    Math.random() < 0.5 ? delete t.short_hair : delete t.long_hair;
+  }
+
+  // Rule 3: ape type = no long hair
+  if (t.type === 'ape') delete t.long_hair;
+
+  // Rule 4: shirt/hoodie_up vs chain
+  const hasHoodieUp = t.hat_over_headphones && t.hat_over_headphones.startsWith('hoodie_');
+  if ((t.shirt || hasHoodieUp) && t.chain) {
+    if (Math.random() < 0.5) {
+      delete t.chain;
+    } else {
+      if (hasHoodieUp) delete t.hat_over_headphones;
+      if (t.shirt) delete t.shirt;
+    }
+  }
+
+  // Rule 5: shirt vs hoodie_up
+  if (t.shirt && hasHoodieUp) {
+    Math.random() < 0.5 ? delete t.shirt : delete t.hat_over_headphones;
+  }
+
+  // Rule 5a/5b: headwear vs mohawk/messy hair
+  const hasHeadwear = t.hat_over_headphones || t.hat_under_headphones;
+  const isMohawkOrMessy = t.short_hair && (t.short_hair.startsWith('mohawk_') || t.short_hair.startsWith('messy_'));
+  if (hasHeadwear && isMohawkOrMessy) {
+    const headwearIsHoodie = t.hat_over_headphones && t.hat_over_headphones.startsWith('hoodie_');
+    if (!headwearIsHoodie) {
+      if (Math.random() < 0.5) {
+        delete t.short_hair;
+      } else {
+        delete t.hat_over_headphones;
+        delete t.hat_under_headphones;
+      }
+    }
+  }
+
+  // Rule 6: top headwear (cowboy/pilot/top) removes all hair
+  const topHats = ['cowboy', 'pilot', 'top'];
+  if (t.hat_over_headphones && topHats.includes(t.hat_over_headphones)) {
+    delete t.short_hair;
+    delete t.long_hair;
+  }
+
+  // Rule 7: hoodie_up removes all hair
+  if (t.hat_over_headphones && t.hat_over_headphones.startsWith('hoodie_')) {
+    delete t.short_hair;
+    delete t.long_hair;
+  }
+
+  // Rule 8/9: zombie type eyes
+  if (t.type === 'zombie' && (t.eyes === 'regular' || t.eyes === 'red')) t.eyes = 'zombie';
+  if (t.type !== 'zombie' && t.eyes === 'zombie') t.eyes = 'regular';
+
+  // Rule 10: alien type eyes
+  if (t.type === 'alien' && t.eyes === 'regular') t.eyes = 'alien';
+
+  // Rule 11: ape messy hair conversion
+  if (t.type === 'ape' && t.short_hair && t.short_hair.startsWith('messy_') && !t.short_hair.endsWith('_ape')) {
+    t.short_hair = t.short_hair + '_ape';
+  }
+  if (t.type !== 'ape' && t.short_hair && t.short_hair.endsWith('_ape')) {
+    t.short_hair = t.short_hair.replace('_ape', '');
+  }
+
+  // Rule 12: based type eyes
+  if (t.type === 'based' && ['alien', 'zombie', 'red'].includes(t.eyes)) t.eyes = 'mfercoin';
+
+  // Rule 13: metal type eyes
+  if (t.type === 'metal' && ['alien', 'zombie', 'red'].includes(t.eyes)) t.eyes = 'metal';
+
+  // Rule 14: long curly hair + square headphones conflict
+  const squareHP = ['black_square', 'blue_square', 'gold_square'];
+  if (t.long_hair === 'long_curly' && squareHP.includes(t.headphones)) delete t.long_hair;
+
+  // Rule 15: pilot + square headphones conflict
+  if (t.hat_over_headphones === 'pilot' && squareHP.includes(t.headphones)) delete t.hat_over_headphones;
+
+  return t;
+}
+
+function traitsToMeshes(traits) {
+  const meshes = new Set();
+
+  // Type meshes
+  for (const m of (TRAIT_MESH_MAPPING.type[traits.type] || [])) meshes.add(m);
+
+  // Eye meshes with type-specific base replacement
+  const eyeMeshes = TRAIT_MESH_MAPPING.eyes[traits.eyes] || ['eyes_normal'];
+  const eyeBase = TYPE_EYE_BASE[traits.type] || 'eyes_normal';
+  for (const m of eyeMeshes) meshes.add(m === 'eyes_normal' ? eyeBase : m);
+
+  // Mouth meshes with type suffix
+  const mouthBase = traits.mouth === 'smile' ? 'mouth_smile' : 'mouth_flat';
+  if (traits.type === 'metal') meshes.add(mouthBase + '_metal');
+  else if (traits.type === 'based') meshes.add(mouthBase + '_mfercoin');
+  else meshes.add(mouthBase);
+
+  // All other trait categories
+  const otherCats = ['headphones', 'hat_over_headphones', 'hat_under_headphones', 'short_hair', 'long_hair', 'shirt', 'watch', 'chain', 'beard', 'smoke', 'shoes_and_gloves'];
+  for (const cat of otherCats) {
+    if (traits[cat] && TRAIT_MESH_MAPPING[cat][traits[cat]]) {
+      for (const m of TRAIT_MESH_MAPPING[cat][traits[cat]]) meshes.add(m);
+    }
+  }
+
+  return meshes;
+}
+
+let currentMeshes = new Set();
+
+function applyMferAppearance() {
+  const traits = generateRandomTraits();
+  currentMeshes = traitsToMeshes(traits);
+  console.log('Random mfer:', traits.type, '| traits:', Object.keys(traits).length);
+
+  if (gltfScene) {
+    gltfScene.traverse((child) => {
+      if (child.isMesh) {
+        child.visible = currentMeshes.has(child.name);
+      }
+    });
+  }
+}
 
 // Ragdoll segment definitions: each maps a bone pair to a physics body
 const RAGDOLL_SEGMENTS = [
@@ -74,6 +408,8 @@ let ragdollJointRefs = [];    // ImpulseJoint references
 let ragdollSegData = {};      // { segName: { bone, halfDist, localRotOffset } }
 let debugMeshes = [];         // wireframe physics helpers
 let showDebug = false;
+let ragdollActive = false;    // false = rigid falling, true = floppy after impact
+let eventQueue;
 
 async function init() {
   await RAPIER.init();
@@ -114,6 +450,7 @@ async function init() {
 
   // Physics
   world = new RAPIER.World({ x: 0, y: -15, z: 0 });
+  eventQueue = new RAPIER.EventQueue(true);
 
   createGround();
   await loadModel();
@@ -220,15 +557,18 @@ async function loadModel() {
       const cloned = SkeletonUtils.clone(gltf.scene);
       gltfScene = cloned;
 
-      // Apply default mfer mesh visibility
+      // Set up mesh rendering properties
       cloned.traverse((child) => {
         if (child.isMesh) {
-          child.visible = DEFAULT_MESHES.has(child.name);
+          child.visible = false;
           child.castShadow = true;
           child.receiveShadow = true;
           child.frustumCulled = false;
         }
       });
+
+      // Apply random mfer appearance before measuring
+      applyMferAppearance();
 
       // Update matrices before measuring
       cloned.updateMatrixWorld(true);
@@ -359,7 +699,8 @@ function createRagdoll() {
       .setMass(seg.mass)
       .setRestitution(0.3)
       .setFriction(0.5)
-      .setCollisionGroups(ragdollGroup);
+      .setCollisionGroups(ragdollGroup)
+      .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
     world.createCollider(colliderDesc, body);
 
     ragdollBodies[seg.name] = body;
@@ -415,11 +756,12 @@ function createRagdoll() {
     ragdollJointRefs.push(joint);
   }
 
-  // Initial impulse on hips
-  const hipsBody = ragdollBodies['hips'];
-  if (hipsBody) {
-    hipsBody.setAngvel({ x: (Math.random() - 0.5) * 3, y: 0, z: (Math.random() - 0.5) * 2 }, true);
-    hipsBody.setLinvel({ x: 1.5 + Math.random(), y: -2, z: (Math.random() - 0.5) * 2 }, true);
+  // Apply uniform velocity to all bodies — they fall as a rigid unit until first impact
+  ragdollActive = false;
+  const initVel = { x: 1.5 + Math.random(), y: -2, z: (Math.random() - 0.5) * 2 };
+  for (const body of Object.values(ragdollBodies)) {
+    body.setLinvel(initVel, true);
+    body.setAngvel({ x: 0, y: 0, z: 0 }, true);
   }
 
   console.log(`Ragdoll created: ${Object.keys(ragdollBodies).length} bodies, ${ragdollJointRefs.length} joints`);
@@ -522,6 +864,9 @@ function reset() {
         child.scale.copy(child.userData.origScale);
       }
     });
+
+    // New random mfer each reset
+    applyMferAppearance();
   }
 
   if (mixer) {
@@ -530,6 +875,7 @@ function reset() {
 
   dropped = false;
   settled = false;
+  ragdollActive = false;
   document.getElementById('instructions').textContent = 'click to drop';
   document.getElementById('score').textContent = '';
   document.getElementById('reset-btn').style.display = 'none';
@@ -588,8 +934,8 @@ function animate() {
 
   if (mixer && !dropped) mixer.update(delta);
 
-  // Step physics
-  world.step();
+  // Step physics with event queue for collision detection
+  world.step(eventQueue);
 
   // Sync obstacle meshes to physics
   for (const { mesh, body } of obstacleParts) {
@@ -600,6 +946,34 @@ function animate() {
   }
 
   if (dropped && Object.keys(ragdollBodies).length > 0) {
+    // Pre-impact: keep all bodies in rigid formation
+    if (!ragdollActive) {
+      const hipsBody = ragdollBodies['hips'];
+      if (hipsBody) {
+        const hv = hipsBody.linvel();
+        for (const body of Object.values(ragdollBodies)) {
+          body.setLinvel({ x: hv.x, y: hv.y, z: hv.z }, true);
+          body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        }
+      }
+
+      // Check for first collision with environment to activate ragdoll
+      eventQueue.drainCollisionEvents((h1, h2, started) => {
+        if (started && !ragdollActive) {
+          ragdollActive = true;
+          // Add random spin on impact for fun tumbling
+          const hb = ragdollBodies['hips'];
+          if (hb) {
+            hb.setAngvel({ x: (Math.random() - 0.5) * 6, y: (Math.random() - 0.5) * 3, z: (Math.random() - 0.5) * 6 }, true);
+          }
+          console.log('Impact! Ragdoll activated');
+        }
+      });
+    } else {
+      // Drain events even when active (must be drained each frame)
+      eventQueue.drainCollisionEvents(() => {});
+    }
+
     // Sync ragdoll bones to physics bodies
     syncRagdollBones();
 
@@ -630,6 +1004,9 @@ function animate() {
       camera.position.z += (camTargetZ - camera.position.z) * 0.08;
       camera.lookAt(pos.x, pos.y, pos.z);
     }
+  } else {
+    // Drain events even when not dropped to prevent buildup
+    eventQueue.drainCollisionEvents(() => {});
   }
 
   renderer.render(scene, camera);
