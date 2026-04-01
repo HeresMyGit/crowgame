@@ -1024,26 +1024,68 @@ function createTruckHitLevel() {
         trafficLights.push(bulb);
       }
 
-      // Parked cars (dynamic — will get hit)
-      const carColors = [0x3366cc, 0xcc3333];
-      for (let i = 0; i < 2; i++) {
-        const cx = 6 + i * 5;
-        // Car body
-        const carBody = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.8, 1.4),
-          new THREE.MeshStandardMaterial({ color: carColors[i], roughness: 0.4, metalness: 0.3 }));
-        carBody.position.set(cx, 1.5, 1.8);
-        carBody.castShadow = true;
-        scene.add(carBody);
-        const carPhys = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
-          .setTranslation(cx, 1.5, 1.8).setLinearDamping(0.5).setAngularDamping(0.5));
-        world.createCollider(RAPIER.ColliderDesc.cuboid(1.25, 0.4, 0.7).setMass(50).setRestitution(0.2).setFriction(0.5), carPhys);
-        p.dynamicParts.push({ mesh: carBody, body: carPhys });
-
-        // Car roof
+      // Trailing cars — drive in behind the truck, slower, spread apart
+      // Truck is at z=-1.5 (far lane, goes +X). Near lane z=1.5 goes -X.
+      const carDefs = [
+        { color: 0x3366cc, startX: -45, z: -1.5, speed: 14, dir: 1 },   // far lane, same as truck
+        { color: 0xcc3333, startX: 40,  z: 1.5,  speed: 14, dir: -1 },  // near lane, opposite
+        { color: 0x44aa44, startX: 55,  z: 1.5,  speed: 14, dir: -1 },  // near lane, opposite (same speed, won't catch up)
+      ];
+      const cars = [];
+      for (const cd of carDefs) {
+        const carGroup = new THREE.Group();
+        const carMesh = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.8, 1.4),
+          new THREE.MeshStandardMaterial({ color: cd.color, roughness: 0.4, metalness: 0.3 }));
+        carMesh.castShadow = true;
+        carGroup.add(carMesh);
         const carTop = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.6, 1.3),
-          new THREE.MeshStandardMaterial({ color: carColors[i], roughness: 0.4, metalness: 0.3 }));
+          new THREE.MeshStandardMaterial({ color: cd.color, roughness: 0.4, metalness: 0.3 }));
         carTop.position.set(0.2, 0.7, 0);
-        carBody.add(carTop);
+        carGroup.add(carTop);
+        // Wheels
+        const cwMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        for (const [wx, wz] of [[0.8, -0.75], [0.8, 0.75], [-0.8, -0.75], [-0.8, 0.75]]) {
+          const cw = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.15, 8), cwMat);
+          cw.rotation.x = Math.PI / 2;
+          cw.position.set(wx, -0.4, wz);
+          carGroup.add(cw);
+        }
+        carGroup.position.set(cd.startX, 1.5, cd.z);
+        if (cd.dir < 0) carGroup.rotation.y = Math.PI; // face opposite direction
+        scene.add(carGroup);
+
+        const carBody = world.createRigidBody(
+          RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(cd.startX, 1.5, cd.z));
+        const carCollider = world.createCollider(
+          RAPIER.ColliderDesc.cuboid(1.25, 0.5, 0.7).setMass(80).setRestitution(0.2).setFriction(0.5)
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS), carBody);
+
+        const carState = { active: false, currentX: cd.startX, speed: cd.speed, hitSomething: false, body: carBody, group: carGroup };
+        cars.push(carState);
+
+        p.animatedObjects.push({
+          group: carGroup, body: carBody, state: carState,
+          update(dt) {
+            if (!carState.active) return;
+            if (!carState.hitSomething) {
+              carState.currentX += carState.speed * cd.dir * dt;
+              carBody.setNextKinematicTranslation({ x: carState.currentX, y: 1.5, z: cd.z });
+              const t = carBody.translation();
+              carGroup.position.set(t.x, t.y, t.z);
+              // Stop driving after passing through
+              if ((cd.dir > 0 && carState.currentX > 25) || (cd.dir < 0 && carState.currentX < -25)) {
+                carState.hitSomething = true;
+                carBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+                carBody.setLinvel({ x: carState.speed * cd.dir * 0.4, y: 0, z: 0 }, true);
+              }
+            } else {
+              const t = carBody.translation();
+              const r = carBody.rotation();
+              carGroup.position.set(t.x, t.y, t.z);
+              carGroup.quaternion.set(r.x, r.y, r.z, r.w);
+            }
+          },
+        });
       }
 
       // === THE TRUCK ===
@@ -1173,6 +1215,7 @@ function createTruckHitLevel() {
       });
 
       p.truckState = truckState;
+      p.cars = cars;
 
       p.reset = () => {
         truckState.active = false;
@@ -1188,6 +1231,19 @@ function createTruckHitLevel() {
         truckGroup.quaternion.set(0, 0, 0, 1);
         trafficLights[0].material.emissive.setHex(0x000000);
         trafficLights[2].material.emissive.setHex(0x00ff00);
+        // Reset cars
+        for (let i = 0; i < cars.length; i++) {
+          const car = cars[i];
+          const cd = carDefs[i];
+          car.active = false;
+          car.hitSomething = false;
+          car.currentX = cd.startX;
+          car.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+          car.body.setTranslation({ x: cd.startX, y: 1.5, z: cd.z }, true);
+          car.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
+          car.group.position.set(cd.startX, 1.5, cd.z);
+          car.group.rotation.set(0, cd.dir < 0 ? Math.PI : 0, 0);
+        }
       };
 
       return p;
@@ -1197,6 +1253,9 @@ function createTruckHitLevel() {
       if (lp.truckState) {
         lp.truckState.active = true;
         lp.truckState.currentX = -25;
+      }
+      if (lp.cars) {
+        for (const car of lp.cars) car.active = true;
       }
     },
 
