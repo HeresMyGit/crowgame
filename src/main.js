@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 
 const MODEL_URL = 'https://sfo3.digitaloceanspaces.com/cybermfers/cybermfers/builders/mfermashup.glb';
@@ -522,6 +523,10 @@ let gamePhase = 'placing';
 let placedMfers = [];        // idle mfers placed during placing phase: { scene, mixer }
 let mfers = [];              // active ragdoll mfers
 
+// Camera
+let orbitControls;
+let cameraMode = 'follow'; // 'follow' or 'free'
+
 // Raycasting + placement preview
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -545,6 +550,18 @@ async function init() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.2;
   document.body.appendChild(renderer.domElement);
+
+  // Orbit controls (disabled by default — enabled in free camera mode)
+  orbitControls = new OrbitControls(camera, renderer.domElement);
+  orbitControls.enableDamping = true;
+  orbitControls.dampingFactor = 0.08;
+  orbitControls.minDistance = 3;
+  orbitControls.maxDistance = 50;
+  orbitControls.maxPolarAngle = Math.PI * 0.85;
+  orbitControls.target.set(0, 2, 0);
+  orbitControls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+  orbitControls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE };
+  orbitControls.enabled = false;
 
   // Lights
   scene.add(new THREE.AmbientLight(0xffffff, 0.7));
@@ -583,6 +600,31 @@ async function init() {
       for (const m of mfers) for (const d of m.debugMeshes) d.mesh.visible = showDebug;
     }
   });
+  // Camera mode toggle
+  const camBtn = document.getElementById('cam-toggle');
+  let camHintShown = false;
+  camBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (cameraMode === 'follow') {
+      cameraMode = 'free';
+      orbitControls.enabled = true;
+      orbitControls.target.set(camera.position.x - 3, camera.position.y - 3, camera.position.z - 10);
+      camBtn.textContent = 'cam: free';
+      camBtn.classList.add('active');
+      if (!camHintShown) {
+        camHintShown = true;
+        const hint = document.getElementById('cam-hint');
+        hint.style.display = 'block';
+        setTimeout(() => { hint.style.display = 'none'; }, 4000);
+      }
+    } else {
+      cameraMode = 'follow';
+      orbitControls.enabled = false;
+      camBtn.textContent = 'cam: follow';
+      camBtn.classList.remove('active');
+    }
+  });
+
   document.getElementById('go-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     onGo();
@@ -1498,7 +1540,7 @@ function activateAllMfers() {
 }
 
 function onClick(e) {
-  if (e.target.closest('#controls, #level-select, #reset-btn, #go-btn, #toggle-controls')) return;
+  if (e.target.closest('#controls, #level-select, #reset-btn, #go-btn, #toggle-controls, #cam-toggle')) return;
 
   if (gamePhase === 'placing') {
     // Place an idle mfer at click position
@@ -1773,24 +1815,27 @@ function animate() {
   if (mfers.length > 0) {
     updateScore();
 
-    // Camera follows latest mfer's hips
-    const latest = mfers[mfers.length - 1];
-    const hipsBody = latest.ragdollBodies['hips'];
-    if (hipsBody) {
-      const pos = hipsBody.translation();
-      const vel = hipsBody.linvel();
-      const lookAheadX = vel.x * 0.15;
-      const camTargetX = pos.x + 3 + lookAheadX;
-      const camTargetY = Math.max(pos.y + 3.5, 3);
-      const camTargetZ = pos.z + 10;
+    if (cameraMode === 'follow') {
+      // Camera follows latest mfer's hips
+      const latest = mfers[mfers.length - 1];
+      const hipsBody = latest.ragdollBodies['hips'];
+      if (hipsBody) {
+        const pos = hipsBody.translation();
+        const vel = hipsBody.linvel();
+        const lookAheadX = vel.x * 0.15;
+        const camTargetX = pos.x + 3 + lookAheadX;
+        const camTargetY = Math.max(pos.y + 3.5, 3);
+        const camTargetZ = pos.z + 10;
 
-      camera.position.x += (camTargetX - camera.position.x) * 0.08;
-      camera.position.y += (camTargetY - camera.position.y) * 0.1;
-      camera.position.z += (camTargetZ - camera.position.z) * 0.08;
-      camera.lookAt(pos.x, pos.y, pos.z);
+        camera.position.x += (camTargetX - camera.position.x) * 0.08;
+        camera.position.y += (camTargetY - camera.position.y) * 0.1;
+        camera.position.z += (camTargetZ - camera.position.z) * 0.08;
+        camera.lookAt(pos.x, pos.y, pos.z);
+      }
     }
   }
 
+  if (cameraMode === 'free') orbitControls.update();
   renderer.render(scene, camera);
 }
 
