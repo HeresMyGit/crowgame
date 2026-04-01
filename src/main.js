@@ -542,8 +542,8 @@ async function init() {
   await RAPIER.init();
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a2e);
-  scene.fog = new THREE.FogExp2(0x1a1a2e, 0.025);
+  scene.background = new THREE.Color(0x87ceeb);
+  scene.fog = new THREE.FogExp2(0x87ceeb, 0.012);
 
   camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
   camera.position.set(0, 6, 14); // overridden after level build
@@ -767,10 +767,14 @@ function createStairLevel() {
     build() {
       const p = { staticBodies: [], staticMeshes: [], dynamicParts: [], helpers: [], animatedObjects: [] };
 
+      // Sky
+      scene.background = new THREE.Color(0x87ceeb);
+      scene.fog = new THREE.FogExp2(0x87ceeb, 0.012);
+
       // === GROUND ===
       const groundSize = Math.max(60, totalD + 20);
       const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundSize, 40),
-        new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.85 }));
+        new THREE.MeshStandardMaterial({ color: 0x6b8c5a, roughness: 0.9 }));
       ground.rotation.x = -Math.PI / 2;
       ground.receiveShadow = true;
       scene.add(ground);
@@ -781,8 +785,8 @@ function createStairLevel() {
       p.staticBodies.push(gb);
 
       // Floor tiles around the base
-      const tileMat1 = new THREE.MeshStandardMaterial({ color: 0x1e2140, roughness: 0.8 });
-      const tileMat2 = new THREE.MeshStandardMaterial({ color: 0x252850, roughness: 0.8 });
+      const tileMat1 = new THREE.MeshStandardMaterial({ color: 0xc4b8a0, roughness: 0.7 });
+      const tileMat2 = new THREE.MeshStandardMaterial({ color: 0xd6cbaf, roughness: 0.7 });
       for (let tx = -8; tx <= totalD + 10; tx += 2) {
         for (let tz = -8; tz <= 8; tz += 2) {
           const tile = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.02, 1.9),
@@ -795,7 +799,7 @@ function createStairLevel() {
       }
 
       // === STAIRCASE ===
-      const stairMat = new THREE.MeshStandardMaterial({ color: 0x3a3a5c, roughness: 0.6, metalness: 0.1 });
+      const stairMat = new THREE.MeshStandardMaterial({ color: 0xb0a08a, roughness: 0.5, metalness: 0.05 });
       const stepW = 10;
 
       // Steps go from left (bottom) to right (top)
@@ -814,10 +818,10 @@ function createStairLevel() {
       }
 
       // Top landing
-      addBox(p, { x: topX, y: topY, z: 0 }, { x: 5, y: 0.3, z: stepW }, 0x3a3a5c, { roughness: 0.6, friction: 0.6 });
+      addBox(p, { x: topX, y: topY, z: 0 }, { x: 5, y: 0.3, z: stepW }, 0xb0a08a, { roughness: 0.5, friction: 0.6 });
 
       // === RAILINGS ===
-      const railMat = new THREE.MeshStandardMaterial({ color: 0x888899, roughness: 0.3, metalness: 0.7 });
+      const railMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.25, metalness: 0.8 });
       for (const zSide of [-stepW / 2 - 0.1, stepW / 2 + 0.1]) {
         // Posts every 3 steps
         for (let i = 0; i <= N; i += 3) {
@@ -857,14 +861,14 @@ function createStairLevel() {
           x: -4 + Math.random() * 6 - 3,
           y: 1 + s / 2,
           z: -3 + Math.random() * 6
-        }, s, 0x533483);
+        }, s, 0xcc6644);
       }
 
       // Barrels at the bottom
       for (let i = 0; i < 4; i++) {
         const s = 0.4;
         const barrel = new THREE.Mesh(new THREE.BoxGeometry(s, s * 2, s),
-          new THREE.MeshStandardMaterial({ color: 0x664422, roughness: 0.7 }));
+          new THREE.MeshStandardMaterial({ color: 0x8b6b4a, roughness: 0.7 }));
         const bx = -6 + Math.random() * 4, bz = -2 + Math.random() * 4;
         barrel.position.set(bx, 1 + s, bz);
         barrel.castShadow = true;
@@ -894,7 +898,7 @@ function createStairLevel() {
       }
 
       // Grid
-      const grid = new THREE.GridHelper(Math.max(40, totalD + 10), 40, 0x0f3460, 0x0f3460);
+      const grid = new THREE.GridHelper(Math.max(40, totalD + 10), 40, 0x999980, 0x999980);
       grid.position.y = 1.01;
       scene.add(grid);
       p.helpers.push(grid);
@@ -918,9 +922,13 @@ function createTruckHitLevel() {
     build() {
       const p = { staticBodies: [], staticMeshes: [], dynamicParts: [], helpers: [], animatedObjects: [] };
 
+      // Sky
+      scene.background = new THREE.Color(0x87ceeb);
+      scene.fog = new THREE.FogExp2(0x87ceeb, 0.012);
+
       // Ground plane
       const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 40),
-        new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 }));
+        new THREE.MeshStandardMaterial({ color: 0x6b8c5a, roughness: 0.9 }));
       ground.rotation.x = -Math.PI / 2;
       ground.receiveShadow = true;
       scene.add(ground);
@@ -932,7 +940,7 @@ function createTruckHitLevel() {
 
       // Road surface
       const road = new THREE.Mesh(new THREE.PlaneGeometry(60, 6),
-        new THREE.MeshStandardMaterial({ color: 0x333338, roughness: 0.85 }));
+        new THREE.MeshStandardMaterial({ color: 0x444448, roughness: 0.85 }));
       road.rotation.x = -Math.PI / 2;
       road.position.set(0, 1.02, 0);
       road.receiveShadow = true;
@@ -959,15 +967,15 @@ function createTruckHitLevel() {
 
       // Sidewalks
       for (const z of [-4.5, 4.5]) {
-        addBox(p, { x: 0, y: 1.1, z }, { x: 60, y: 0.2, z: 2.5 }, 0x555555, { roughness: 0.9, friction: 0.7 });
+        addBox(p, { x: 0, y: 1.1, z }, { x: 60, y: 0.2, z: 2.5 }, 0xaaa498, { roughness: 0.8, friction: 0.7 });
       }
       // Curbs
       for (const z of [-3.15, 3.15]) {
-        addBox(p, { x: 0, y: 1.15, z }, { x: 60, y: 0.3, z: 0.15 }, 0x666666, { friction: 0.6 });
+        addBox(p, { x: 0, y: 1.15, z }, { x: 60, y: 0.3, z: 0.15 }, 0xbbae9e, { friction: 0.6 });
       }
 
       // Buildings backdrop
-      const buildingColors = [0x2a2a3e, 0x1e1e30, 0x252540];
+      const buildingColors = [0xc8beb0, 0xb5a898, 0xd4cabb];
       for (let i = 0; i < 4; i++) {
         const h = 6 + Math.random() * 8;
         const w = 4 + Math.random() * 3;
@@ -982,7 +990,7 @@ function createTruckHitLevel() {
           for (let wx = -1.2; wx <= 1.2; wx += 1.2) {
             if (Math.random() > 0.3) {
               const win = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.05),
-                new THREE.MeshStandardMaterial({ color: 0x88aacc, emissive: 0x88aacc, emissiveIntensity: 0.4 + Math.random() * 0.4 }));
+                new THREE.MeshStandardMaterial({ color: 0x6699bb, roughness: 0.1, metalness: 0.3 }));
               win.position.set(bx + wx, wy, -5.9);
               scene.add(win);
               p.staticMeshes.push(win);
