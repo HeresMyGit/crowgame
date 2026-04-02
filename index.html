@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>mfer bash</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #1a1a2e; font-family: monospace; }
     canvas { display: block; }
+
+    /* Top overlay — title, instructions, score */
     #ui {
       position: absolute;
-      top: 20px;
+      top: 12px;
       left: 50%;
       transform: translateX(-50%);
       color: #fff;
@@ -18,191 +20,173 @@
       pointer-events: none;
       z-index: 10;
     }
-    #title {
-      font-size: 32px;
-      font-weight: bold;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-      margin-bottom: 8px;
-    }
-    #instructions {
-      font-size: 16px;
-      opacity: 0.8;
-      text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-    }
+    #instructions { font-size: 14px; opacity: 0.8; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+    #score { color: #e94560; font-family: monospace; font-size: 20px; font-weight: bold; white-space: nowrap; }
     #loading {
-      position: absolute;
-      top: 50%;
-      left: 50%;
+      position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, -50%);
-      color: #fff;
-      font-size: 24px;
-      font-family: monospace;
-      z-index: 20;
+      color: #fff; font-size: 24px; font-family: monospace; z-index: 20;
     }
-    #clear-btn {
-      position: absolute;
-      bottom: 30px;
-      right: 180px;
-      padding: 12px 24px;
-      font-size: 16px;
-      font-family: monospace;
-      background: #666;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      z-index: 10;
+
+    /* Top-right corner buttons */
+    .corner-btn {
+      position: absolute; top: 12px; z-index: 11;
+      background: rgba(0,0,0,0.5); color: #fff;
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
+      padding: 6px 10px; font-family: monospace; font-size: 12px; cursor: pointer;
+    }
+    .corner-btn:active { background: rgba(255,255,255,0.15); }
+    .corner-btn.active { background: #e94560; border-color: #e94560; }
+    #cam-toggle { right: 100px; }
+    #toggle-controls { right: 12px; }
+
+    /* Settings panel */
+    #controls {
+      position: absolute; top: 44px; right: 12px;
+      background: rgba(0,0,0,0.8); backdrop-filter: blur(6px);
+      padding: 12px 14px; border-radius: 8px;
+      color: #fff; font-size: 12px; z-index: 12;
+      min-width: 200px; max-height: 70vh; overflow-y: auto;
       display: none;
     }
-    #clear-btn:hover { background: #888; }
-    #reset-btn {
-      position: absolute;
-      bottom: 30px;
-      right: 30px;
-      padding: 12px 32px;
-      font-size: 18px;
-      font-family: monospace;
-      background: #e94560;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      z-index: 10;
-      display: none;
+    #controls h3 { margin: 0 0 8px; font-size: 12px; opacity: 0.5; text-transform: uppercase; letter-spacing: 1px; }
+    #controls label { display: flex; justify-content: space-between; align-items: center; margin: 5px 0; gap: 8px; }
+    #controls label span { opacity: 0.8; white-space: nowrap; }
+    #controls input[type=range] { flex: 1; min-width: 70px; cursor: pointer; accent-color: #e94560; }
+    #controls .val { min-width: 28px; text-align: right; font-size: 11px; opacity: 0.5; }
+    #defaults-btn {
+      margin-top: 8px; width: 100%; padding: 5px;
+      font-family: monospace; font-size: 11px;
+      background: rgba(255,255,255,0.1); color: #fff;
+      border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; cursor: pointer;
     }
-    #go-btn {
-      position: absolute;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 14px 40px;
-      font-size: 20px;
-      font-family: monospace;
-      font-weight: bold;
-      background: #4ecdc4;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      z-index: 10;
-      display: none;
-      text-transform: uppercase;
-      letter-spacing: 2px;
+
+    /* Camera hint tooltip */
+    #cam-hint {
+      display: none; position: absolute; top: 44px; right: 12px;
+      background: rgba(0,0,0,0.85); color: #4ecdc4;
+      padding: 8px 14px; border-radius: 6px;
+      font-family: monospace; font-size: 11px; z-index: 13;
+      pointer-events: none; line-height: 1.6;
     }
-    #go-btn:hover { background: #6ee6de; }
-    #reset-btn:hover { background: #ff6b81; }
+
+    /* Bottom HUD bar */
+    #hud {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+      z-index: 10; padding: 8px 12px 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
     #level-select {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      z-index: 10;
-      display: flex;
-      gap: 4px;
+      display: flex; gap: 3px; margin-bottom: 8px;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
     }
     .level-btn {
-      background: rgba(0,0,0,0.5);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 4px;
-      padding: 5px 12px;
-      font-family: monospace;
-      font-size: 12px;
-      cursor: pointer;
+      background: rgba(255,255,255,0.08); color: #fff;
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 5px;
+      padding: 6px 12px; font-family: monospace; font-size: 12px;
+      cursor: pointer; white-space: nowrap; flex-shrink: 0;
     }
     .level-btn.active { background: #e94560; border-color: #e94560; }
-    .level-btn:hover:not(.active) { background: rgba(255,255,255,0.1); }
-    #controls {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: rgba(0,0,0,0.7);
-      padding: 12px 16px;
-      border-radius: 8px;
-      color: #fff;
-      font-size: 12px;
-      z-index: 10;
-      min-width: 180px;
-      backdrop-filter: blur(4px);
+    .level-btn:active:not(.active) { background: rgba(255,255,255,0.15); }
+
+    #action-row {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
     }
-    #controls h3 { margin: 0 0 8px; font-size: 13px; opacity: 0.6; }
-    #controls label { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
-    #controls label span { opacity: 0.8; }
-    #controls input[type=range] { width: 90px; cursor: pointer; accent-color: #e94560; }
-    #controls .val { width: 32px; text-align: right; font-size: 11px; opacity: 0.6; }
-    #cam-toggle {
-      position: absolute;
-      top: 20px;
-      right: 100px;
-      background: rgba(0,0,0,0.5);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 4px;
-      padding: 4px 8px;
-      font-family: monospace;
-      font-size: 12px;
-      cursor: pointer;
-      z-index: 11;
+    .action-btn {
+      padding: 10px 24px; font-family: monospace; font-size: 15px; font-weight: bold;
+      color: #fff; border: none; border-radius: 6px; cursor: pointer;
+      text-transform: uppercase; letter-spacing: 1px;
     }
-    #cam-toggle.active { background: #e94560; border-color: #e94560; }
-    #toggle-controls {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: rgba(0,0,0,0.5);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 4px;
-      padding: 4px 8px;
-      font-family: monospace;
-      font-size: 12px;
-      cursor: pointer;
-      z-index: 11;
+    .action-btn:active { filter: brightness(1.2); }
+    #go-btn { background: #4ecdc4; display: none; }
+    #reset-btn { background: #e94560; display: none; }
+    #clear-btn { background: rgba(255,255,255,0.15); display: none; font-size: 13px; padding: 8px 16px; }
+
+    /* Impact captures — above HUD */
+    #impact-captures {
+      display: none; position: absolute; bottom: 110px; left: 12px; z-index: 15;
+    }
+    #impact-captures > div { display: flex; gap: 6px; }
+    .capture-btn {
+      padding: 10px 16px; border-radius: 6px; cursor: pointer;
+      font-family: monospace; font-size: 12px; font-weight: bold; text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    #impact-photo .capture-btn { background: #fff; color: #1a1a2e; }
+    #impact-video-wrap .capture-btn { background: #4ecdc4; color: #1a1a2e; }
+
+    /* Mobile adjustments */
+    @media (max-width: 768px) {
+      #instructions { font-size: 12px; }
+      .corner-btn { padding: 8px 10px; font-size: 11px; }
+      #cam-toggle { right: 90px; }
+      #toggle-controls { right: 8px; }
+      #controls { top: 40px; right: 8px; }
+      #hud { padding: 6px 8px 8px; }
+      .level-btn { padding: 7px 10px; font-size: 11px; }
+      .action-btn { padding: 10px 18px; font-size: 14px; }
+      #clear-btn { padding: 8px 12px; font-size: 12px; }
+      #impact-captures { bottom: 100px; left: 8px; }
+    }
+    @media (max-width: 400px) {
+      .action-btn { padding: 8px 14px; font-size: 13px; }
+      .level-btn { padding: 6px 8px; font-size: 10px; }
     }
   </style>
 </head>
 <body>
   <div id="ui">
-    <div id="title">mfer bash</div>
     <div id="instructions">click to place, shift+drag to set height</div>
-    <div id="score" style="font-size: 48px; color: #e94560; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); margin-top: 8px;"></div>
   </div>
-  <div id="level-select">
-    <button class="level-btn active" data-level="0">stairs</button>
-    <button class="level-btn" data-level="1">truck hit</button>
-    <button class="level-btn" data-level="2">wrecking ball</button>
-    <button class="level-btn" data-level="3">pachinko</button>
-    <button class="level-btn" data-level="4">press</button>
-  </div>
-  <div id="impact-captures" style="display:none;position:absolute;bottom:80px;left:20px;z-index:15;">
-    <div style="display:flex;gap:8px;align-items:flex-end;">
-      <div id="impact-photo" style="cursor:pointer;">
-        <div style="background:#fff;color:#1a1a2e;font-family:monospace;font-size:13px;font-weight:bold;text-align:center;padding:12px 20px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5);">save photo</div>
-      </div>
-      <div id="impact-video-wrap" style="cursor:pointer;display:none;">
-        <div style="background:#4ecdc4;color:#1a1a2e;font-family:monospace;font-size:13px;font-weight:bold;text-align:center;padding:12px 20px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5);">save gif</div>
-      </div>
-    </div>
-  </div>
+
   <div id="loading">loading mfer...</div>
-  <div id="cam-hint" style="display:none;position:absolute;top:50px;right:20px;background:rgba(0,0,0,0.8);color:#4ecdc4;padding:8px 14px;border-radius:6px;font-family:monospace;font-size:12px;z-index:12;pointer-events:none;">WASD/arrows move, Q/E rotate, Z/X up/down<br>right-click drag to orbit, scroll to zoom</div>
-  <button id="cam-toggle">cam: follow</button>
-  <button id="toggle-controls">settings</button>
-  <div id="controls" style="display:none;">
+
+  <!-- Top-right corner -->
+  <button id="cam-toggle" class="corner-btn">cam: follow</button>
+  <button id="toggle-controls" class="corner-btn">settings</button>
+  <div id="cam-hint">WASD/arrows move, Q/E rotate, Z/X up/down<br>right-click drag to orbit, scroll to zoom</div>
+
+  <!-- Settings panel -->
+  <div id="controls">
     <h3>physics</h3>
     <label><span>gravity</span><input type="range" id="sl-gravity" min="1" max="50" value="15" step="1"><span class="val" id="v-gravity">15</span></label>
-    <label><span>launch speed</span><input type="range" id="sl-launch" min="0" max="10" value="2" step="0.5"><span class="val" id="v-launch">2</span></label>
+    <label><span>launch</span><input type="range" id="sl-launch" min="0" max="10" value="2" step="0.5"><span class="val" id="v-launch">2</span></label>
     <label><span>spin</span><input type="range" id="sl-spin" min="0" max="15" value="6" step="0.5"><span class="val" id="v-spin">6</span></label>
     <label><span>bounce</span><input type="range" id="sl-bounce" min="0" max="1" value="0.3" step="0.05"><span class="val" id="v-bounce">0.3</span></label>
     <label><span>damping</span><input type="range" id="sl-damping" min="0" max="4" value="2" step="0.1"><span class="val" id="v-damping">2</span></label>
-    <label><span>drop height</span><input type="range" id="sl-height" min="3" max="20" value="7" step="1"><span class="val" id="v-height">7</span></label>
+    <label><span>height</span><input type="range" id="sl-height" min="3" max="20" value="7" step="1"><span class="val" id="v-height">7</span></label>
     <label><span>speed</span><input type="range" id="sl-timescale" min="10" max="200" value="100" step="10"><span class="val" id="v-timescale">100%</span></label>
-    <label data-level="0"><span>stair count</span><input type="range" id="sl-stairs" min="10" max="50" value="30" step="1"><span class="val" id="v-stairs">30</span></label>
+    <label data-level="0"><span>stairs</span><input type="range" id="sl-stairs" min="10" max="50" value="30" step="1"><span class="val" id="v-stairs">30</span></label>
     <label data-level="3"><span>pachinko</span><input type="range" id="sl-pachinko" min="1" max="10" value="5" step="1"><span class="val" id="v-pachinko">5</span></label>
-    <button id="defaults-btn" style="margin-top:8px;width:100%;padding:4px;font-family:monospace;font-size:11px;background:#333;color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:4px;cursor:pointer;">defaults</button>
+    <button id="defaults-btn">defaults</button>
   </div>
-  <button id="go-btn">go!</button>
-  <button id="clear-btn">clear</button>
-  <button id="reset-btn">reset</button>
+
+  <!-- Impact captures -->
+  <div id="impact-captures">
+    <div>
+      <div id="impact-photo" style="cursor:pointer;"><div class="capture-btn">save photo</div></div>
+      <div id="impact-video-wrap" style="cursor:pointer;display:none;"><div class="capture-btn">save gif</div></div>
+    </div>
+  </div>
+
+  <!-- Bottom HUD -->
+  <div id="hud">
+    <div id="level-select">
+      <button class="level-btn active" data-level="0">stairs</button>
+      <button class="level-btn" data-level="1">truck hit</button>
+      <button class="level-btn" data-level="2">wrecking ball</button>
+      <button class="level-btn" data-level="3">pachinko</button>
+      <button class="level-btn" data-level="4">press</button>
+    </div>
+    <div id="action-row">
+      <button id="go-btn" class="action-btn">go!</button>
+      <button id="reset-btn" class="action-btn">reset</button>
+      <button id="clear-btn" class="action-btn">clear</button>
+      <div id="score"></div>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

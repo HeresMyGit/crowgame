@@ -654,7 +654,7 @@ async function init() {
   window.addEventListener('resize', onResize);
   window.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || e.shiftKey) return;
-    if (e.target.closest('#controls, #level-select, #reset-btn, #clear-btn, #go-btn, #toggle-controls, #cam-toggle, #cam-hint')) return;
+    if (e.target.closest('#hud, #controls, #toggle-controls, #cam-toggle, #cam-hint, #impact-captures')) return;
     painting = true;
     lastPaintPos = null;
   });
@@ -682,7 +682,34 @@ async function init() {
   });
   window.addEventListener('mouseup', () => { painting = false; paintedThisClick = !!lastPaintPos; });
   window.addEventListener('click', onClick);
-  window.addEventListener('touchstart', (e) => { e.preventDefault(); onClick(e); }, { passive: false });
+  window.addEventListener('touchstart', (e) => {
+    if (e.target === renderer.domElement) {
+      e.preventDefault();
+      painting = true;
+      lastPaintPos = null;
+      onClick(e);
+    }
+  }, { passive: false });
+  window.addEventListener('touchmove', (e) => {
+    if (e.target === renderer.domElement && painting && gamePhase === 'placing') {
+      e.preventDefault();
+      const worldPos = getClickWorldPos(e);
+      if (worldPos) {
+        const now = performance.now();
+        const far = !lastPaintPos || (lastPaintPos.distanceTo(worldPos) >= PAINT_MIN_DIST && now - lastPaintTime >= PAINT_MIN_TIME);
+        if (far) {
+          lastPaintPos = worldPos.clone();
+          lastPaintTime = now;
+          const pm = spawnIdleMfer(worldPos);
+          if (pm) {
+            placedMfers.push(pm);
+            savedSpawns.push({ x: worldPos.x, y: worldPos.y, z: worldPos.z, rotY: 0 });
+          }
+        }
+      }
+    }
+  }, { passive: false });
+  window.addEventListener('touchend', () => { painting = false; });
   window.addEventListener('keydown', (e) => {
     keysDown.add(e.key.toLowerCase());
     if (e.key === 'b' || e.key === 'B') {
@@ -792,6 +819,8 @@ async function init() {
   });
   controlsEl.addEventListener('click', (e) => e.stopPropagation());
   controlsEl.addEventListener('touchstart', (e) => e.stopPropagation());
+  document.getElementById('hud').addEventListener('click', (e) => e.stopPropagation());
+  document.getElementById('hud').addEventListener('touchstart', (e) => e.stopPropagation());
 
   // Wire up sliders
   const sliders = [
@@ -2780,7 +2809,7 @@ function activateAllMfers() {
 }
 
 function onClick(e) {
-  if (e.target.closest('#controls, #level-select, #reset-btn, #clear-btn, #go-btn, #toggle-controls, #cam-toggle, #cam-hint')) return;
+  if (e.target.closest('#hud, #controls, #toggle-controls, #cam-toggle, #cam-hint, #impact-captures')) return;
   if (paintedThisClick) { paintedThisClick = false; return; }
 
   if (gamePhase === 'placing') {
