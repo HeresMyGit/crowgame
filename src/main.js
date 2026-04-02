@@ -1284,7 +1284,7 @@ function getLevelCtx() {
     get placedMfers() { return placedMfers; },
     set placedMfers(v) { placedMfers = v; },
     get mfers() { return mfers; },
-    createRagdoll, captureImpactShot,
+    createRagdoll, captureImpactShot, detachAccessories,
   };
 }
 
