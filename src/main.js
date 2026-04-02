@@ -574,7 +574,8 @@ let savedSpawns = [];        // saved { x, y, z, rotY } for reset
 
 // Camera
 let orbitControls;
-let cameraMode = 'follow'; // 'follow' or 'free'
+let cameraMode = 'follow';
+const keysDown = new Set();
 
 // Raycasting + placement preview
 const raycaster = new THREE.Raycaster();
@@ -683,11 +684,13 @@ async function init() {
   window.addEventListener('click', onClick);
   window.addEventListener('touchstart', (e) => { e.preventDefault(); onClick(e); }, { passive: false });
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'd' || e.key === 'D') {
+    keysDown.add(e.key.toLowerCase());
+    if (e.key === 'b' || e.key === 'B') {
       showDebug = !showDebug;
       for (const m of mfers) for (const d of m.debugMeshes) d.mesh.visible = showDebug;
     }
   });
+  window.addEventListener('keyup', (e) => keysDown.delete(e.key.toLowerCase()));
   // Camera mode toggle
   const camBtn = document.getElementById('cam-toggle');
   let camHintShown = false;
@@ -3185,6 +3188,39 @@ function animate() {
         camera.position.z += (camTargetZ - camera.position.z) * 0.08;
         camera.lookAt(pos.x, pos.y, pos.z);
       }
+    }
+  }
+
+  // WASD+QE camera movement
+  if (keysDown.size > 0) {
+    const speed = 8 * rawDelta;
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+
+    const rotSpeed = 1.5 * rawDelta;
+    if (keysDown.has('w') || keysDown.has('arrowup')) { camera.position.addScaledVector(forward, speed); }
+    if (keysDown.has('s') || keysDown.has('arrowdown')) { camera.position.addScaledVector(forward, -speed); }
+    if (keysDown.has('a') || keysDown.has('arrowleft')) { camera.position.addScaledVector(right, -speed); }
+    if (keysDown.has('d') || keysDown.has('arrowright')) { camera.position.addScaledVector(right, speed); }
+    if (keysDown.has('z')) { camera.position.y -= speed; }
+    if (keysDown.has('x')) { camera.position.y += speed; }
+    if (keysDown.has('q')) { camera.rotateY(rotSpeed); }
+    if (keysDown.has('e')) { camera.rotateY(-rotSpeed); }
+
+    // Recalculate forward after rotation
+    const fwd = new THREE.Vector3();
+    camera.getWorldDirection(fwd);
+
+    const moveKeys = ['w','a','s','d','q','e','z','x','arrowup','arrowdown','arrowleft','arrowright'];
+    if (cameraMode === 'follow' && moveKeys.some(k => keysDown.has(k))) {
+      cameraMode = 'free';
+      orbitControls.enabled = true;
+      document.getElementById('cam-toggle').textContent = 'cam: free';
+      document.getElementById('cam-toggle').classList.add('active');
+    }
+    if (orbitControls.enabled) {
+      orbitControls.target.set(camera.position.x + fwd.x * 5, camera.position.y + fwd.y * 5, camera.position.z + fwd.z * 5);
     }
   }
 
