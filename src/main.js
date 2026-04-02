@@ -555,6 +555,72 @@ function getDetachSegment(name) {
 let impactShotTaken = false;
 let pendingImpactMfer = null;
 let pendingImpactFrames = 0;
+// Video capture — records canvas from Go until mfer settles
+let videoRecorder = null;
+let videoChunks = [];
+let videoUrl = null;
+let videoExt = 'mp4';
+let videoSettledTimer = 0;
+let videoHasAction = false; // only check settled after we've seen fast movement
+
+function startVideoRecording() {
+  try {
+    const stream = renderer.domElement.captureStream(30);
+    // Prefer MP4 (plays everywhere), fall back to WebM
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4'
+      : MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '';
+    videoRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    videoChunks = [];
+    videoRecorder.ondataavailable = (e) => { if (e.data.size > 0) videoChunks.push(e.data); };
+    videoRecorder.onstop = () => {
+      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+      const blob = new Blob(videoChunks, { type: mimeType || 'video/webm' });
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+      videoUrl = URL.createObjectURL(blob);
+      videoExt = ext;
+      document.getElementById('impact-captures').style.display = 'block';
+      document.getElementById('impact-full-video').style.display = 'block';
+    };
+    videoRecorder.start(100);
+    videoSettledTimer = 0;
+    videoHasAction = false;
+  } catch (e) {
+    console.warn('Video recording not supported:', e);
+  }
+}
+
+function stopVideoRecording() {
+  if (videoRecorder && videoRecorder.state === 'recording') {
+    videoRecorder.stop();
+    videoRecorder = null;
+  }
+}
+
+function checkVideoSettled() {
+  if (!videoRecorder || videoRecorder.state !== 'recording') return;
+  if (mfers.length === 0) return;
+
+  let maxSpeed = 0;
+  for (const mfer of mfers) {
+    const hips = mfer.ragdollBodies['hips'];
+    if (!hips) continue;
+    const v = hips.linvel();
+    const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    if (speed > maxSpeed) maxSpeed = speed;
+  }
+
+  // Wait until we've seen actual movement before checking for settlement
+  if (maxSpeed > 2) videoHasAction = true;
+  if (!videoHasAction) return;
+
+  if (maxSpeed < 0.3) {
+    videoSettledTimer += 1 / 60;
+    if (videoSettledTimer > 1) stopVideoRecording();
+  } else {
+    videoSettledTimer = 0;
+  }
+}
+
 // GIF capture — frames stored raw, encoded only on user request
 const GIF_FPS = 30;
 const GIF_PRE = 1.5;
@@ -1178,6 +1244,15 @@ async function init() {
       URL.revokeObjectURL(url);
       label.textContent = origText;
     }, 50);
+  });
+
+  document.getElementById('impact-full-video').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!videoUrl) return;
+    const link = document.createElement('a');
+    link.download = 'mfer-bash-full.' + videoExt;
+    link.href = videoUrl;
+    link.click();
   });
 
   // Settings panel toggle
@@ -1898,8 +1973,14 @@ function onGo() {
   gifFrameBuffer = [];
   gifFinalFrames = null;
   gifCapturing = false;
+  // Clean up previous recording before starting new one
+  stopVideoRecording();
+  if (videoUrl) { URL.revokeObjectURL(videoUrl); videoUrl = null; }
   document.getElementById('impact-captures').style.display = 'none';
+  document.getElementById('impact-full-video').style.display = 'none';
   document.getElementById('impact-video-wrap').style.display = 'none';
+  // Start fresh recording
+  startVideoRecording();
   document.getElementById('go-btn').style.display = 'none';
   document.getElementById('reset-btn').style.display = 'block';
   document.getElementById('clear-btn').style.display = 'block';
@@ -2288,6 +2369,7 @@ function animate() {
 
   if (mfers.length > 0) {
     // updateScore(); // disabled for now
+    checkVideoSettled();
 
     if (cameraMode !== 'free') {
       // Camera follows latest mfer's hips with zoom level
