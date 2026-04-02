@@ -2353,7 +2353,8 @@ function animate() {
       if (mfer.ragdollActive) {
         // Already active — play collision sound based on velocity
         const hb = mfer.ragdollBodies['hips'];
-        if (hb && (!mfer.lastImpactSound || performance.now() - mfer.lastImpactSound > 150)) {
+        const soundCooldown = Math.max(150, mfers.length * 80); // 1 mfer=150ms, 5=400ms, 10=800ms
+        if (hb && (!mfer.lastImpactSound || performance.now() - mfer.lastImpactSound > soundCooldown)) {
           const v = hb.linvel();
           const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
           if (speed > 1) {
