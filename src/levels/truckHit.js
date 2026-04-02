@@ -91,6 +91,179 @@ export default function createTruckHitLevel(ctx) {
         }
       }
 
+      // === CROSSWALK ===
+      for (let cz = -2.5; cz <= 2.5; cz += 0.7) {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 2),
+          new THREE.MeshStandardMaterial({ color: 0xffffff }));
+        stripe.position.set(2, 1.03, cz);
+        ctx.scene.add(stripe);
+        p.staticMeshes.push(stripe);
+      }
+
+      // === STREET LIGHTS ===
+      const streetLightMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.3, metalness: 0.6 });
+      const streetGlowMat = new THREE.MeshStandardMaterial({ color: 0xffeecc, emissive: 0xffddaa, emissiveIntensity: 0.6 });
+      for (const slx of [-12, -4, 8, 16]) {
+        // Pole
+        const slPole = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4, 0.1), streetLightMat);
+        slPole.position.set(slx, 3.2, 4);
+        slPole.castShadow = true;
+        ctx.scene.add(slPole);
+        p.staticMeshes.push(slPole);
+        // Arm extending over road
+        const slArm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2), streetLightMat);
+        slArm.position.set(slx, 5.1, 3);
+        ctx.scene.add(slArm);
+        p.staticMeshes.push(slArm);
+        // Lamp
+        const slLamp = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 0.5), streetLightMat);
+        slLamp.position.set(slx, 5.05, 2.1);
+        ctx.scene.add(slLamp);
+        p.staticMeshes.push(slLamp);
+        // Glow
+        const slBulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), streetGlowMat);
+        slBulb.position.set(slx, 4.95, 2.1);
+        ctx.scene.add(slBulb);
+        p.staticMeshes.push(slBulb);
+        // Actual point light
+        const slLight = new THREE.PointLight(0xffddaa, 0.4, 10);
+        slLight.position.set(slx, 4.9, 2.1);
+        ctx.scene.add(slLight);
+        p.staticMeshes.push(slLight);
+      }
+
+      // === FIRE HYDRANT (dynamic) ===
+      const hydrantMat = new THREE.MeshStandardMaterial({ color: 0xdd2222, roughness: 0.5, metalness: 0.3 });
+      const hydrant = new THREE.Group();
+      const hydBody = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 0.6, 8), hydrantMat);
+      hydrant.add(hydBody);
+      const hydTop = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.15, 8), hydrantMat);
+      hydTop.position.y = 0.37;
+      hydrant.add(hydTop);
+      const hydCap = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), hydrantMat);
+      hydCap.position.y = 0.5;
+      hydrant.add(hydCap);
+      hydrant.position.set(-2, 1.3, 3.8);
+      hydrant.castShadow = true;
+      ctx.scene.add(hydrant);
+      const hydPhys = ctx.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(-2, 1.3, 3.8).setLinearDamping(0.3).setAngularDamping(0.3));
+      ctx.world.createCollider(RAPIER.ColliderDesc.cuboid(0.18, 0.3, 0.18).setMass(15).setRestitution(0.3).setFriction(0.5), hydPhys);
+      p.dynamicParts.push({ mesh: hydrant, body: hydPhys, initPos: { x: -2, y: 1.3, z: 3.8 } });
+
+      // === MAILBOX ===
+      const mailboxMat = new THREE.MeshStandardMaterial({ color: 0x2255aa, roughness: 0.5, metalness: 0.3 });
+      const mailbox = new THREE.Group();
+      const mbBody = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.3), mailboxMat);
+      mailbox.add(mbBody);
+      const mbTop = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.05, 0.32), mailboxMat);
+      mbTop.position.y = 0.27;
+      mailbox.add(mbTop);
+      const mbPost = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08),
+        new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.5 }));
+      mbPost.position.y = -0.5;
+      mailbox.add(mbPost);
+      mailbox.position.set(6, 1.85, 4.2);
+      mailbox.castShadow = true;
+      ctx.scene.add(mailbox);
+      p.staticMeshes.push(mailbox);
+
+      // === STOP SIGN ===
+      const stopPoleMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.5 });
+      const stopPole = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3, 0.08), stopPoleMat);
+      stopPole.position.set(-6, 2.7, -3.5);
+      stopPole.castShadow = true;
+      ctx.scene.add(stopPole);
+      p.staticMeshes.push(stopPole);
+      const stopSign = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.05),
+        new THREE.MeshStandardMaterial({ color: 0xcc0000, roughness: 0.5 }));
+      stopSign.position.set(-6, 4.2, -3.5);
+      ctx.scene.add(stopSign);
+      p.staticMeshes.push(stopSign);
+      // White border
+      const stopBorder = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.04),
+        new THREE.MeshStandardMaterial({ color: 0xffffff }));
+      stopBorder.position.set(-6, 4.2, -3.52);
+      ctx.scene.add(stopBorder);
+      p.staticMeshes.push(stopBorder);
+
+      // === TRASH CANS (dynamic) ===
+      const trashMat = new THREE.MeshStandardMaterial({ color: 0x556655, roughness: 0.7 });
+      for (const tz of [3.8, 4.3]) {
+        const trash = new THREE.Group();
+        const trashBody = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.7, 8), trashMat);
+        trash.add(trashBody);
+        const trashLid = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 8), trashMat);
+        trashLid.position.y = 0.37;
+        trash.add(trashLid);
+        const tx = 10 + (tz - 3.8) * 3;
+        trash.position.set(tx, 1.55, tz);
+        trash.castShadow = true;
+        ctx.scene.add(trash);
+        const trashPhys = ctx.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+          .setTranslation(tx, 1.55, tz).setLinearDamping(0.4).setAngularDamping(0.4));
+        ctx.world.createCollider(RAPIER.ColliderDesc.cuboid(0.22, 0.35, 0.22).setMass(5).setRestitution(0.3).setFriction(0.5), trashPhys);
+        p.dynamicParts.push({ mesh: trash, body: trashPhys, initPos: { x: tx, y: 1.55, z: tz } });
+      }
+
+      // === BUS STOP BENCH ===
+      const benchMat = new THREE.MeshStandardMaterial({ color: 0x886644, roughness: 0.7 });
+      const benchMetalMat = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.6, roughness: 0.3 });
+      // Seat
+      const benchSeat = new THREE.Mesh(new THREE.BoxGeometry(2, 0.08, 0.5), benchMat);
+      benchSeat.position.set(-8, 1.55, 4.5);
+      benchSeat.castShadow = true;
+      ctx.scene.add(benchSeat);
+      p.staticMeshes.push(benchSeat);
+      // Legs
+      for (const bx of [-8.8, -7.2]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.06), benchMetalMat);
+        leg.position.set(bx, 1.33, 4.5);
+        ctx.scene.add(leg);
+        p.staticMeshes.push(leg);
+      }
+      // Backrest
+      const benchBack = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 0.06), benchMat);
+      benchBack.position.set(-8, 1.85, 4.72);
+      ctx.scene.add(benchBack);
+      p.staticMeshes.push(benchBack);
+      // Bus stop sign
+      const busPole = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.5, 0.06), benchMetalMat);
+      busPole.position.set(-9.2, 2.45, 4.5);
+      busPole.castShadow = true;
+      ctx.scene.add(busPole);
+      p.staticMeshes.push(busPole);
+      const busSign = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.05),
+        new THREE.MeshStandardMaterial({ color: 0x2266aa, roughness: 0.5 }));
+      busSign.position.set(-9.2, 3.5, 4.5);
+      ctx.scene.add(busSign);
+      p.staticMeshes.push(busSign);
+
+      // === BUILDING DETAILS: awnings, doors, shop signs ===
+      const awningMat = new THREE.MeshStandardMaterial({ color: 0xcc4444, roughness: 0.7 });
+      const doorMat = new THREE.MeshStandardMaterial({ color: 0x553322, roughness: 0.6 });
+      for (let i = 0; i < 4; i++) {
+        const bx = -12 + i * 9 + Math.random() * 2;
+        // Awning
+        const awning = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.08, 1),
+          new THREE.MeshStandardMaterial({ color: [0xcc4444, 0x44aa66, 0x4466cc, 0xccaa33][i], roughness: 0.7 }));
+        awning.position.set(bx, 3, -5.5);
+        awning.rotation.x = -0.15;
+        ctx.scene.add(awning);
+        p.staticMeshes.push(awning);
+        // Door
+        const door = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.6, 0.06), doorMat);
+        door.position.set(bx, 1.9, -5.9);
+        ctx.scene.add(door);
+        p.staticMeshes.push(door);
+        // Door handle
+        const handle = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6),
+          new THREE.MeshStandardMaterial({ color: 0xddaa44, metalness: 0.8 }));
+        handle.position.set(bx + 0.3, 1.85, -5.85);
+        ctx.scene.add(handle);
+        p.staticMeshes.push(handle);
+      }
+
       // Traffic light
       const poleMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
       const pole = new THREE.Mesh(new THREE.BoxGeometry(0.12, 4, 0.12), poleMat);
@@ -241,6 +414,13 @@ export default function createTruckHitLevel(ctx) {
           new THREE.MeshStandardMaterial({ color: 0xffffaa, emissive: 0xffffaa, emissiveIntensity: 1.5 }));
         hl.position.set(3.35, -0.3, z);
         truckGroup.add(hl);
+      }
+
+      // Headlight point lights
+      for (const z of [-0.6, 0.6]) {
+        const hlLight = new THREE.PointLight(0xffffaa, 0.6, 8);
+        hlLight.position.set(3.5, -0.3, z);
+        truckGroup.add(hlLight);
       }
 
       // Wheels
