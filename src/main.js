@@ -618,8 +618,10 @@ async function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.0;
+  renderer.physicallyCorrectLights = true;
   document.body.appendChild(renderer.domElement);
 
   // Orbit controls (disabled by default — enabled in free camera mode)
@@ -634,23 +636,39 @@ async function init() {
   orbitControls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE };
   orbitControls.enabled = false;
 
-  // Lights
-  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-  const dir = new THREE.DirectionalLight(0xffffff, 1.5);
-  dir.position.set(5, 12, 5);
-  dir.castShadow = true;
-  dir.shadow.mapSize.set(2048, 2048);
-  dir.shadow.camera.near = 0.5;
-  dir.shadow.camera.far = 40;
-  dir.shadow.camera.left = -15;
-  dir.shadow.camera.right = 15;
-  dir.shadow.camera.top = 15;
-  dir.shadow.camera.bottom = -5;
-  scene.add(dir);
+  // Lights — dramatic three-point setup
+  // Hemisphere: sky/ground bounce, strong enough to lift shadows on dark surfaces
+  const hemi = new THREE.HemisphereLight(0x88bbee, 0x556633, 1.5);
+  scene.add(hemi);
 
-  const rim = new THREE.DirectionalLight(0xe94560, 0.4);
-  rim.position.set(-3, 5, -3);
-  scene.add(rim);
+  // Ambient floor — ensures nothing goes pure black
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+  // Main sun — strong, warm, dramatic shadows
+  const sun = new THREE.DirectionalLight(0xfff0d0, 3.0);
+  sun.position.set(6, 12, 8);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.camera.near = 0.5;
+  sun.shadow.camera.far = 60;
+  sun.shadow.camera.left = -25;
+  sun.shadow.camera.right = 25;
+  sun.shadow.camera.top = 25;
+  sun.shadow.camera.bottom = -10;
+  sun.shadow.bias = -0.0005;
+  sun.shadow.normalBias = 0.02;
+  sun.shadow.radius = 3;
+  scene.add(sun);
+
+  // Cool fill from opposite side — keeps shadows from going pure black
+  const fill = new THREE.DirectionalLight(0x80a8cc, 1.2);
+  fill.position.set(-8, 6, -6);
+  scene.add(fill);
+
+  // Back/rim light — adds edge definition
+  const back = new THREE.DirectionalLight(0xffeedd, 0.8);
+  back.position.set(-2, 8, -10);
+  scene.add(back);
 
   // Physics
   world = new RAPIER.World({ x: 0, y: -settings.gravity, z: 0 });
