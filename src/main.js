@@ -907,6 +907,7 @@ let modelScale = 1;
 let modelCenter = new THREE.Vector3();
 let modelBottomY = 0;
 let lastTime = performance.now();
+let physicsAccum = 0;
 let originalPos = new THREE.Vector3();
 let impactScore = 0;
 let maxVelocity = 0;
@@ -2261,16 +2262,19 @@ function animate() {
   if (mixer && gltfScene) mixer.update(delta);
   for (const pm of placedMfers) { if (pm.mixer) pm.mixer.update(delta); }
 
-  // Step physics with time scaling
+  // Step physics with fixed timestep accumulator (frame-rate independent)
+  const PHYSICS_DT = 1 / 60;
   const timeScale = settings.timeScale / 100;
-  if (timeScale <= 1) {
-    world.timestep = (1 / 60) * timeScale;
+  physicsAccum += rawDelta * timeScale;
+  const maxSteps = 4; // cap to prevent spiral of death
+  let steps = 0;
+  world.timestep = PHYSICS_DT;
+  while (physicsAccum >= PHYSICS_DT && steps < maxSteps) {
     world.step(eventQueue);
-  } else {
-    world.timestep = 1 / 60;
-    const steps = Math.round(timeScale);
-    for (let i = 0; i < steps; i++) world.step(eventQueue);
+    physicsAccum -= PHYSICS_DT;
+    steps++;
   }
+  if (physicsAccum > PHYSICS_DT * 2) physicsAccum = 0; // reset if too far behind
 
   // Sync level dynamic parts to physics
   if (levelParts) {
