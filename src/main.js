@@ -3022,6 +3022,12 @@ function getShiftHeight(e) {
 
 function updateGhostPreview(e) {
   if (gamePhase !== 'placing' || !ghostPreview) return;
+  // Hide when hovering over UI
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (el && el.closest('#hud, #controls, #toggle-controls, #cam-toggle, #impact-captures')) {
+    ghostPreview.visible = false;
+    return;
+  }
   const worldPos = getClickWorldPos(e);
   if (worldPos) {
     const hit = worldPos;
