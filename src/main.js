@@ -4,6 +4,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+// mp4-muxer removed — using MediaRecorder instead
 import createStairLevel from './levels/stairs.js';
 import createTruckHitLevel from './levels/truckHit.js';
 import createWreckingBallLevel from './levels/wreckingBall.js';
@@ -555,49 +556,60 @@ function getDetachSegment(name) {
 let impactShotTaken = false;
 let pendingImpactMfer = null;
 let pendingImpactFrames = 0;
-// Video capture — records canvas from Go until mfer settles
+// Video capture — MediaRecorder (Safari = MP4, Chrome = WebM)
 let videoRecorder = null;
 let videoChunks = [];
 let videoUrl = null;
 let videoExt = 'mp4';
 let videoSettledTimer = 0;
-let videoHasAction = false; // only check settled after we've seen fast movement
+let videoHasAction = false;
+let videoRecording = false;
 
 function startVideoRecording() {
   try {
     const stream = renderer.domElement.captureStream(30);
-    // Prefer MP4 (plays everywhere), fall back to WebM
-    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4'
-      : MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '';
-    videoRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    // Safari supports MP4 natively, Chrome/FF use WebM
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+    videoRecorder = new MediaRecorder(stream, { mimeType });
     videoChunks = [];
-    videoRecorder.ondataavailable = (e) => { if (e.data.size > 0) videoChunks.push(e.data); };
+    videoExt = mimeType.includes('mp4') ? 'mp4' : 'webm';
+    videoRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        videoChunks.push(e.data);
+        console.log('Video chunk:', e.data.size, 'bytes, total chunks:', videoChunks.length);
+      }
+    };
     videoRecorder.onstop = () => {
-      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-      const blob = new Blob(videoChunks, { type: mimeType || 'video/webm' });
+      const blob = new Blob(videoChunks, { type: mimeType });
       if (videoUrl) URL.revokeObjectURL(videoUrl);
       videoUrl = URL.createObjectURL(blob);
-      videoExt = ext;
       document.getElementById('impact-captures').style.display = 'block';
       document.getElementById('impact-full-video').style.display = 'block';
+      console.log('Video ready:', videoExt, blob.size, 'bytes');
     };
     videoRecorder.start(100);
+    videoRecording = true;
     videoSettledTimer = 0;
     videoHasAction = false;
+    console.log('Recording started:', mimeType);
   } catch (e) {
-    console.warn('Video recording not supported:', e);
+    console.warn('Video recording failed:', e);
   }
 }
 
 function stopVideoRecording() {
+  if (!videoRecording) return;
+  videoRecording = false;
   if (videoRecorder && videoRecorder.state === 'recording') {
+    videoRecorder.requestData(); // flush pending data
     videoRecorder.stop();
-    videoRecorder = null;
+    console.log('Recording stopped');
   }
+  // Don't null out videoRecorder here — onstop callback needs it
 }
 
 function checkVideoSettled() {
-  if (!videoRecorder || videoRecorder.state !== 'recording') return;
+  if (!videoRecording) return;
   if (mfers.length === 0) return;
 
   let maxSpeed = 0;
@@ -615,7 +627,10 @@ function checkVideoSettled() {
 
   if (maxSpeed < 0.3) {
     videoSettledTimer += 1 / 60;
-    if (videoSettledTimer > 1) stopVideoRecording();
+    if (videoSettledTimer > 1) {
+      console.log('Video: mfers settled, stopping recording');
+      stopVideoRecording();
+    }
   } else {
     videoSettledTimer = 0;
   }
@@ -2025,8 +2040,11 @@ function onGo() {
   gifFrameBuffer = [];
   gifFinalFrames = null;
   gifCapturing = false;
-  // Clean up previous recording before starting new one
-  stopVideoRecording();
+  // Kill any previous recording
+  videoRecording = false;
+  if (videoRecorder && videoRecorder.state === 'recording') { try { videoRecorder.stop(); } catch(e) {} }
+  videoRecorder = null;
+  videoChunks = [];
   if (videoUrl) { URL.revokeObjectURL(videoUrl); videoUrl = null; }
   document.getElementById('impact-captures').style.display = 'none';
   document.getElementById('impact-full-video').style.display = 'none';
