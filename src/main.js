@@ -2687,8 +2687,11 @@ function createPressLevel() {
 function createCannonLevel() {
   return {
     name: 'cannon',
-    spawnPos: { x: -8, y: 2.5, z: 0 },
+    spawnPos: { x: -9, y: 1.8, z: 0 },
     groundY: 1,
+    spawnRotY: Math.PI - 0.3, // face away from camera, tilted up from ground
+    spawnRotX: -Math.PI / 2, // face toward ground
+    spawnRotZ: Math.PI / 2 - 0.20, // horizontal, head toward mouth, angled up to match cannon
     cameraStart: { pos: [-6, 4, 8], lookAt: [-8, 2.5, 0] },
     settingsOverrides: { launchSpeed: 0, dropHeight: 1, damping: 0.3 },
     keepIdleUntilImpact: true,
@@ -2771,7 +2774,7 @@ function createCannonLevel() {
       // === BLOCK WALL (target) ===
       const blockColors = [0xcc4444, 0x44aa44, 0x4466cc, 0xccaa22, 0xcc6633];
       const wallX = 8;
-      const rows = 6, cols = 5, layers = 3;
+      const rows = 12, cols = 5, layers = 1;
       const bw = 1.0, bh = 0.6, bd = 0.8;
 
       for (let layer = 0; layer < layers; layer++) {
@@ -2799,25 +2802,14 @@ function createCannonLevel() {
         }
       }
 
-      // === CANNONBALL ===
-      const ballRadius = 0.4;
-      const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(ballRadius, 12, 12),
-        new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3, metalness: 0.8 }));
-      ballMesh.position.set(-10, 1.8, 0);
-      ballMesh.visible = false; // hidden until fired
-      ballMesh.castShadow = true;
-      scene.add(ballMesh);
-
       const cannonState = {
         active: false,
         fired: false,
-        ballMesh,
-        ballBody: null,
         chargeTime: 0,
       };
 
       p.animatedObjects.push({
-        mesh: ballMesh, state: cannonState,
+        state: cannonState,
         update(dt) {
           if (!cannonState.active) return;
 
@@ -2835,12 +2827,12 @@ function createCannonLevel() {
                 const mfer = createRagdoll(pm.scene);
                 if (mfer) {
                   // Launch! Strong forward velocity + slight arc
-                  const launchSpeed = 30;
+                  const launchSpeed = 45;
                   for (const body of Object.values(mfer.ragdollBodies)) {
                     body.setLinvel({
-                      x: launchSpeed + (Math.random() - 0.5) * 3,
-                      y: 5 + Math.random() * 3,
-                      z: (Math.random() - 0.5) * 3,
+                      x: launchSpeed + (Math.random() - 0.5) * 4,
+                      y: 8 + Math.random() * 4,
+                      z: (Math.random() - 0.5) * 4,
                     }, true);
                     body.setAngvel({
                       x: (Math.random() - 0.5) * 8,
@@ -2855,17 +2847,6 @@ function createCannonLevel() {
                 }
               }
               placedMfers = [];
-
-              // Fire a cannonball too
-              ballMesh.visible = true;
-              ballMesh.position.set(-8, 2.2, 0);
-              const bb = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
-                .setTranslation(-8, 2.2, 0).setLinearDamping(0.05));
-              world.createCollider(RAPIER.ColliderDesc.ball(ballRadius)
-                .setMass(50).setRestitution(0.3).setFriction(0.4), bb);
-              bb.setLinvel({ x: 35, y: 6, z: 0 }, true);
-              cannonState.ballBody = bb;
-              p.dynamicParts.push({ mesh: ballMesh, body: bb });
             }
           }
         },
@@ -2879,13 +2860,6 @@ function createCannonLevel() {
         cannonState.chargeTime = 0;
         fuse.visible = true;
         fuse.material.emissiveIntensity = 0.5;
-        ballMesh.visible = false;
-        if (cannonState.ballBody) {
-          world.removeRigidBody(cannonState.ballBody);
-          cannonState.ballBody = null;
-          // Remove from dynamicParts
-          p.dynamicParts = p.dynamicParts.filter(dp => dp.mesh !== ballMesh);
-        }
       };
 
       return p;
@@ -2966,7 +2940,9 @@ function switchLevel(index) {
     applyRandomAppearance(cloned);
     cloned.scale.setScalar(modelScale);
     cloned.position.copy(originalPos);
+    if (currentLevel.spawnRotX) cloned.rotation.x = currentLevel.spawnRotX;
     if (currentLevel.spawnRotY) cloned.rotation.y = currentLevel.spawnRotY;
+    if (currentLevel.spawnRotZ) cloned.rotation.z = currentLevel.spawnRotZ;
     cloned.traverse(c => { if (c.isBone) { c.userData.origPos = c.position.clone(); c.userData.origQuat = c.quaternion.clone(); c.userData.origScale = c.scale.clone(); } });
     scene.add(cloned);
     gltfScene = cloned;
@@ -3334,7 +3310,7 @@ function updateGhostPreview(e) {
   }
 }
 
-function spawnIdleMfer(worldPos, rotationY) {
+function spawnIdleMfer(worldPos, rot) {
   if (!originalGltf) return null;
 
   const cloned = SkeletonUtils.clone(originalGltf.scene);
@@ -3344,7 +3320,13 @@ function spawnIdleMfer(worldPos, rotationY) {
   applyRandomAppearance(cloned);
   cloned.scale.setScalar(modelScale);
   cloned.position.set(worldPos.x - modelCenter.x * modelScale, worldPos.y, worldPos.z - modelCenter.z * modelScale);
-  if (rotationY !== undefined) cloned.rotation.y = rotationY;
+  if (typeof rot === 'number') {
+    cloned.rotation.y = rot; // legacy: single Y rotation
+  } else if (rot) {
+    if (rot.x) cloned.rotation.x = rot.x;
+    if (rot.y) cloned.rotation.y = rot.y;
+    if (rot.z) cloned.rotation.z = rot.z;
+  }
 
   cloned.traverse((child) => {
     if (child.isBone) { child.userData.origPos = child.position.clone(); child.userData.origQuat = child.quaternion.clone(); child.userData.origScale = child.scale.clone(); }
@@ -3371,7 +3353,7 @@ function activateAllMfers() {
     const iy = gltfScene.position.y;
     const iz = gltfScene.position.z + modelCenter.z * modelScale;
     if (!savedSpawns.some(s => s.isLauncher)) {
-      savedSpawns.unshift({ x: ix, y: iy, z: iz, rotY: gltfScene.rotation.y, isLauncher: true });
+      savedSpawns.unshift({ x: ix, y: iy, z: iz, rotX: gltfScene.rotation.x, rotY: gltfScene.rotation.y, rotZ: gltfScene.rotation.z, isLauncher: true });
     }
     placedMfers.push({ scene: gltfScene, mixer, isLauncher: true });
     gltfScene = null;
@@ -3459,7 +3441,7 @@ function onClick(e) {
       const ix = gltfScene.position.x + modelCenter.x * modelScale;
       const iy = gltfScene.position.y;
       const iz = gltfScene.position.z + modelCenter.z * modelScale;
-      savedSpawns.push({ x: ix, y: iy, z: iz, rotY: gltfScene.rotation.y, isLauncher: true });
+      savedSpawns.push({ x: ix, y: iy, z: iz, rotX: gltfScene.rotation.x, rotY: gltfScene.rotation.y, rotZ: gltfScene.rotation.z, isLauncher: true });
       placedMfers.push({ scene: gltfScene, mixer, isLauncher: true });
       gltfScene = null;
       mixer = null;
@@ -3545,7 +3527,7 @@ function reset() {
 
   // Re-create all mfers at their saved spawn positions
   for (const sp of savedSpawns) {
-    const pm = spawnIdleMfer({ x: sp.x, y: sp.y, z: sp.z }, sp.rotY);
+    const pm = spawnIdleMfer({ x: sp.x, y: sp.y, z: sp.z }, { x: sp.rotX, y: sp.rotY, z: sp.rotZ });
     if (pm) {
       if (sp.isLauncher) pm.isLauncher = true;
       placedMfers.push(pm);
@@ -3561,7 +3543,9 @@ function reset() {
     applyRandomAppearance(cloned);
     cloned.scale.setScalar(modelScale);
     cloned.position.copy(originalPos);
+    if (currentLevel.spawnRotX) cloned.rotation.x = currentLevel.spawnRotX;
     if (currentLevel.spawnRotY) cloned.rotation.y = currentLevel.spawnRotY;
+    if (currentLevel.spawnRotZ) cloned.rotation.z = currentLevel.spawnRotZ;
     cloned.traverse((child) => {
       if (child.isBone) { child.userData.origPos = child.position.clone(); child.userData.origQuat = child.quaternion.clone(); child.userData.origScale = child.scale.clone(); }
     });
@@ -3617,7 +3601,9 @@ function clearAll() {
     applyRandomAppearance(cloned);
     cloned.scale.setScalar(modelScale);
     cloned.position.copy(originalPos);
+    if (currentLevel.spawnRotX) cloned.rotation.x = currentLevel.spawnRotX;
     if (currentLevel.spawnRotY) cloned.rotation.y = currentLevel.spawnRotY;
+    if (currentLevel.spawnRotZ) cloned.rotation.z = currentLevel.spawnRotZ;
     cloned.traverse(c => { if (c.isBone) { c.userData.origPos = c.position.clone(); c.userData.origQuat = c.quaternion.clone(); c.userData.origScale = c.scale.clone(); } });
     scene.add(cloned);
     gltfScene = cloned;
