@@ -1259,6 +1259,73 @@ async function init() {
     e.stopPropagation();
     clearAll();
   });
+  // === SAVE/SHARE MODAL ===
+  const saveModal = document.getElementById('save-modal');
+  const saveModalMedia = document.getElementById('save-modal-media');
+  const saveModalHint = document.getElementById('save-modal-hint');
+  const saveModalTitle = document.getElementById('save-modal-title');
+  const saveModalDownload = document.getElementById('save-modal-download');
+  const saveModalShare = document.getElementById('save-modal-share');
+  const saveModalClose = document.getElementById('save-modal-close');
+  let currentSaveData = null; // { url, filename, type, blob }
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isAndroid = /Android/.test(navigator.userAgent);
+  const isMobile = isIOS || isAndroid;
+
+  function showSaveModal(title, mediaEl, dataUrl, filename, mimeType, blob) {
+    saveModalTitle.textContent = title;
+    saveModalMedia.innerHTML = '';
+    saveModalMedia.appendChild(mediaEl);
+    currentSaveData = { url: dataUrl, filename, type: mimeType, blob };
+
+    // Platform-specific hint
+    if (isIOS) {
+      saveModalHint.textContent = 'press and hold the image, then tap "Add to Photos"';
+    } else if (isAndroid) {
+      saveModalHint.textContent = 'tap Share below, or press and hold to save';
+    } else {
+      saveModalHint.textContent = 'right-click to save, or use the buttons below';
+    }
+
+    // Show share button if supported
+    saveModalShare.style.display = (navigator.share || navigator.canShare) ? '' : 'none';
+
+    saveModal.style.display = 'flex';
+  }
+
+  saveModal.addEventListener('click', () => { saveModal.style.display = 'none'; });
+  document.getElementById('save-modal-content').addEventListener('click', (e) => e.stopPropagation());
+  saveModalClose.addEventListener('click', () => { saveModal.style.display = 'none'; });
+
+  saveModalDownload.addEventListener('click', () => {
+    if (!currentSaveData) return;
+    const link = document.createElement('a');
+    link.download = currentSaveData.filename;
+    link.href = currentSaveData.url;
+    link.click();
+  });
+
+  saveModalShare.addEventListener('click', async () => {
+    if (!currentSaveData) return;
+    try {
+      let blob = currentSaveData.blob;
+      if (!blob) {
+        const resp = await fetch(currentSaveData.url);
+        blob = await resp.blob();
+      }
+      const file = new File([blob], currentSaveData.filename, { type: currentSaveData.type });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'mfer bash' });
+      } else if (navigator.share) {
+        await navigator.share({ title: 'mfer bash', url: currentSaveData.url });
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') console.warn('Share failed:', e);
+    }
+  });
+
+  // Photo button → render close-up, show in modal
   document.getElementById('impact-photo').addEventListener('click', (e) => {
     e.stopPropagation();
     if (!impactPhotoMfer) return;
@@ -1268,30 +1335,28 @@ async function init() {
     const hp = headBody.translation();
     const savedPos = camera.position.clone();
     const savedQuat = camera.quaternion.clone();
-
     const faceDir = new THREE.Vector3();
     camera.getWorldDirection(faceDir);
     camera.position.set(hp.x - faceDir.x * 2, hp.y + 0.5, hp.z - faceDir.z * 2);
     camera.lookAt(hp.x, hp.y, hp.z);
     renderer.render(scene, camera);
-
     const dataUrl = renderer.domElement.toDataURL('image/png');
     camera.position.copy(savedPos);
     camera.quaternion.copy(savedQuat);
 
-    const link = document.createElement('a');
-    link.download = 'mfer-bash-impact.png';
-    link.href = dataUrl;
-    link.click();
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.style.cssText = 'max-width:100%;max-height:50vh;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+    showSaveModal('impact photo', img, dataUrl, 'mfer-bash-impact.png', 'image/png');
   });
+
+  // GIF button → encode, show in modal
   document.getElementById('impact-video-wrap').addEventListener('click', (e) => {
     e.stopPropagation();
     if (!gifFinalFrames || gifFinalFrames.length === 0) return;
-    // Show encoding status
     const label = e.currentTarget.querySelector('div');
     const origText = label.textContent;
     label.textContent = 'encoding...';
-    // Defer encoding to next frame so UI updates
     setTimeout(() => {
       const encoder = GIFEncoder();
       const delay = Math.round(1000 / GIF_FPS);
@@ -1303,22 +1368,28 @@ async function init() {
       encoder.finish();
       const blob = new Blob([encoder.bytes()], { type: 'image/gif' });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.download = 'mfer-bash.gif';
-      link.href = url;
-      link.click();
-      URL.revokeObjectURL(url);
       label.textContent = origText;
+
+      const img = document.createElement('img');
+      img.src = url;
+      img.style.cssText = 'max-width:100%;max-height:50vh;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+      showSaveModal('impact gif', img, url, 'mfer-bash.gif', 'image/gif', blob);
     }, 50);
   });
 
+  // Video button → show in modal
   document.getElementById('impact-full-video').addEventListener('click', (e) => {
     e.stopPropagation();
     if (!videoUrl) return;
-    const link = document.createElement('a');
-    link.download = 'mfer-bash-full.' + videoExt;
-    link.href = videoUrl;
-    link.click();
+    const vid = document.createElement('video');
+    vid.src = videoUrl;
+    vid.controls = true;
+    vid.autoplay = true;
+    vid.loop = true;
+    vid.muted = true;
+    vid.playsInline = true;
+    vid.style.cssText = 'max-width:100%;max-height:50vh;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+    showSaveModal('full video', vid, videoUrl, 'mfer-bash-full.' + videoExt, 'video/' + videoExt);
   });
 
   // Settings panel toggle

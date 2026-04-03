@@ -181,6 +181,20 @@
     </div>
   </div>
 
+  <!-- Save/Share modal -->
+  <div id="save-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);z-index:100;display:none;align-items:center;justify-content:center;">
+    <div id="save-modal-content" style="background:rgba(20,20,25,0.95);border-radius:16px;padding:24px;max-width:400px;width:90%;border:1px solid rgba(255,255,255,0.1);box-shadow:0 8px 32px rgba(0,0,0,0.5);text-align:center;max-height:90vh;overflow-y:auto;">
+      <div style="color:#fff;font-family:'SartoshiScript',monospace;font-size:20px;margin-bottom:12px;" id="save-modal-title">your mfer</div>
+      <div id="save-modal-hint" style="background:rgba(255,255,255,0.1);padding:10px;border-radius:8px;margin-bottom:14px;color:#aaa;font-family:monospace;font-size:12px;"></div>
+      <div id="save-modal-media" style="display:flex;justify-content:center;margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <button id="save-modal-download" class="action-btn" style="background:#4ecdc4;font-size:13px;padding:8px 18px;">download</button>
+        <button id="save-modal-share" class="action-btn" style="background:#6b8cff;font-size:13px;padding:8px 18px;display:none;">share</button>
+        <button id="save-modal-close" class="action-btn" style="background:rgba(255,255,255,0.15);font-size:13px;padding:8px 18px;">close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Bottom HUD -->
   <div id="hud">
     <div id="level-select">
