@@ -33,7 +33,12 @@
       z-index: 10;
     }
     #instructions { font-size: 14px; opacity: 0.8; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
-    #score { color: #e94560; font-family: monospace; font-size: 20px; font-weight: bold; white-space: nowrap; }
+    #score {
+      position: absolute; top: 12px; left: 12px;
+      color: #e94560; font-family: 'SartoshiScript', monospace; font-size: 36px; font-weight: bold;
+      white-space: nowrap; pointer-events: none; z-index: 10;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
     #loading {
       position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, 30%);
@@ -149,6 +154,7 @@
   </style>
 </head>
 <body>
+  <div id="score"></div>
   <div id="ui">
     <div id="instructions">click to place, shift+drag to set height</div>
   </div>
@@ -219,7 +225,6 @@
       <button id="go-btn" class="action-btn">go!</button>
       <button id="reset-btn" class="action-btn">reset</button>
       <button id="clear-btn" class="action-btn">clear</button>
-      <div id="score"></div>
     </div>
   </div>
 

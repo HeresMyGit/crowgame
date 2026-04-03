@@ -281,7 +281,8 @@ export default function createCannonball2Level(ctx) {
                 .setTranslation(-6, 2, 0));
               ctx.world.createCollider(RAPIER.ColliderDesc.ball(ballRadius)
                 .setMass(500).setRestitution(0.1).setFriction(0.3)
-                .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS), bb);
+                .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
+                .setContactForceEventThreshold(800), bb);
               state.ballBody = bb;
 
               // Smoke puff
@@ -324,6 +325,7 @@ export default function createCannonball2Level(ctx) {
                     mfer.canDetach = true;
                     ctx.captureImpactShot(mfer);
                     ctx.mfers.push(mfer);
+                    if (ctx.addDamage) ctx.addDamage(state.ballSpeed);
                   }
                 } else {
                   remaining.push(pm);

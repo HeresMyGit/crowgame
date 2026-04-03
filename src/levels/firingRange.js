@@ -405,6 +405,7 @@ export default function createFiringRangeLevel(ctx) {
                   ctx.captureImpactShot(mfer);
                   ctx.mfers.push(mfer);
                   if (ctx.playImpact) ctx.playImpact(8);
+                  if (ctx.addDamage) ctx.addDamage(b.speed);
                 }
                 b.hit = true;
                 didHit = true;

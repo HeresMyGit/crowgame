@@ -913,9 +913,19 @@ let lastTime = performance.now();
 let physicsAccum = 0;
 let originalPos = new THREE.Vector3();
 let impactScore = 0;
-let maxVelocity = 0;
 let settled = false;
 let settledTimer = 0;
+// Collision-based scoring
+const colliderToMfer = new Map(); // collider handle → { mfer, segment }
+const SEGMENT_SCORE_MULT = { head: 3, spine: 1.5, hips: 1.5 }; // limbs default 1x
+const FORCE_THRESHOLD = 800; // only count real impacts, not resting contact
+
+// Award damage from level-driven hits (truck, cannonball, bullets, etc.)
+function addDamage(speed) {
+  const points = Math.round(Math.sqrt(speed * 1000) * 0.5);
+  if (points > 0) impactScore += points;
+}
+
 let showDebug = false;
 let eventQueue;
 
@@ -1488,7 +1498,7 @@ function getLevelCtx() {
     get placedMfers() { return placedMfers; },
     set placedMfers(v) { placedMfers = v; },
     get mfers() { return mfers; },
-    createRagdoll, captureImpactShot, detachAccessories,
+    createRagdoll, captureImpactShot, detachAccessories, addDamage,
     playImpact, playBoom, playHorn, playHiss, playCrush, playWreckingHit, playGunshot,
   };
 }
@@ -1534,6 +1544,7 @@ function switchLevel(index) {
     scene.remove(mfer.scene);
   }
   mfers = [];
+  colliderToMfer.clear();
   if (gltfScene) { scene.remove(gltfScene); gltfScene = null; mixer = null; }
 
   cleanupLevel();
@@ -1756,10 +1767,12 @@ function createRagdoll(targetScene) {
       .setRestitution(settings.bounce)
       .setFriction(0.5)
       .setCollisionGroups(ragdollGroup)
-      .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
-    world.createCollider(colliderDesc, body);
+      .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
+      .setContactForceEventThreshold(FORCE_THRESHOLD);
+    const col = world.createCollider(colliderDesc, body);
 
     mfer.ragdollBodies[seg.name] = body;
+    colliderToMfer.set(col.handle, { mfer, segment: seg.name });
     mfer.ragdollSegData[seg.name] = { bone, halfDist, localRotOffset };
 
     // Debug wireframe visualization
@@ -2139,7 +2152,6 @@ function onGo() {
   settled = false;
   settledTimer = 0;
   impactScore = 0;
-  maxVelocity = 0;
 
   activateAllMfers();
 
@@ -2159,6 +2171,7 @@ function cleanupMfers() {
     scene.remove(mfer.scene);
   }
   mfers = [];
+  colliderToMfer.clear();
   for (const pm of placedMfers) {
     if (pm.mixer) pm.mixer.stopAllAction();
     if (pm.triggerBody) world.removeRigidBody(pm.triggerBody);
@@ -2295,27 +2308,21 @@ function onResize() {
 }
 
 function updateScore() {
-  const latest = mfers[mfers.length - 1];
-  if (!latest || !latest.ragdollBodies['hips']) return;
+  if (mfers.length === 0) return;
 
-  // Aggregate velocity across latest mfer's bodies
-  let totalSpeed = 0;
-  let totalSpin = 0;
-  let count = 0;
-  for (const body of Object.values(latest.ragdollBodies)) {
-    const v = body.linvel();
-    const a = body.angvel();
-    totalSpeed += Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-    totalSpin += Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
-    count++;
+  // Check if all mfers have settled
+  let allSlow = true;
+  for (const mfer of mfers) {
+    const hb = mfer.ragdollBodies['hips'];
+    if (!hb) continue;
+    const v = hb.linvel();
+    const a = hb.angvel();
+    const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    const spin = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+    if (speed > 0.15 || spin > 0.15) { allSlow = false; break; }
   }
-  const avgSpeed = totalSpeed / count;
-  const avgSpin = totalSpin / count;
-  maxVelocity = Math.max(maxVelocity, avgSpeed);
-  impactScore = Math.round(maxVelocity * 100 + avgSpin * 50);
 
-  // Check if settled
-  if (avgSpeed < 0.15 && avgSpin < 0.15) {
+  if (allSlow) {
     settledTimer += 1 / 60;
     if (settledTimer > 1.5 && !settled) {
       settled = true;
@@ -2472,6 +2479,25 @@ function animate() {
     if (currentLevel.onCollision && levelParts) currentLevel.onCollision(levelParts, h1, h2);
   });
 
+  // Drain contact force events for collision-based scoring (skip if already settled)
+  eventQueue.drainContactForceEvents((evt) => {
+    if (settled) return;
+    const h1 = evt.collider1();
+    const h2 = evt.collider2();
+    const force = evt.totalForceMagnitude();
+    const info1 = colliderToMfer.get(h1);
+    const info2 = colliderToMfer.get(h2);
+    const targets = [info1, info2].filter(Boolean);
+    const scored = new Set();
+    for (const info of targets) {
+      if (scored.has(info.mfer)) continue;
+      scored.add(info.mfer);
+      const mult = SEGMENT_SCORE_MULT[info.segment] || 1;
+      const points = Math.round(Math.sqrt(force) * mult * 0.5);
+      if (points > 0) impactScore += points;
+    }
+  });
+
   // Proximity-based standing mfer activation — track what hit them for velocity transfer
   const hitByMap = new Map(); // pm -> hitting mfer's hips velocity
   for (const mfer of mfers) {
@@ -2522,7 +2548,7 @@ function animate() {
   }
 
   if (mfers.length > 0) {
-    // updateScore(); // disabled for now
+    updateScore();
     checkVideoSettled();
 
     if (cameraMode !== 'free') {

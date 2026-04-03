@@ -297,6 +297,7 @@ export default function createCannonLevel(ctx) {
                     mfer.detachAfter = performance.now() + 500;
                     ctx.captureImpactShot(mfer);
                     ctx.mfers.push(mfer);
+                    if (ctx.addDamage) ctx.addDamage(launchSpeed);
                   }
                 } else {
                   // Far from cannon — give trigger capsule, wait for impact

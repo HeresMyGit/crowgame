@@ -290,7 +290,8 @@ export default function createWreckingBallLevel(ctx) {
         RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(pivotX, pivotY - chainLength, pivotZ));
       ctx.world.createCollider(
         RAPIER.ColliderDesc.ball(ballRadius).setMass(2000).setRestitution(0.1).setFriction(0.3)
-          .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS), ballBody);
+          .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
+          .setContactForceEventThreshold(800), ballBody);
 
       const ballState = {
         active: false, released: false, angle: -Math.PI / 3, angleVel: 0,
@@ -359,6 +360,7 @@ export default function createWreckingBallLevel(ctx) {
                   if (ctx.playWreckingHit) ctx.playWreckingHit();
                   mfer.canDetach = true;
                   ctx.mfers.push(mfer);
+                  if (ctx.addDamage) ctx.addDamage(speed * 1.5);
                 }
               } else {
                 remaining.push(pm);

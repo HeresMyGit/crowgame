@@ -323,7 +323,8 @@ export default function createTruckHitLevel(ctx) {
           RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(cd.startX, 1.5, cd.z));
         const carCollider = ctx.world.createCollider(
           RAPIER.ColliderDesc.cuboid(1.25, 0.5, 0.7).setMass(80).setRestitution(0.2).setFriction(0.5)
-            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS), carBody);
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
+            .setContactForceEventThreshold(800), carBody);
 
         const carState = { active: false, currentX: cd.startX, speed: cd.speed, hitSomething: false, body: carBody, group: carGroup };
         cars.push(carState);
@@ -356,6 +357,7 @@ export default function createTruckHitLevel(ctx) {
                     mfer.ragdollActive = true;
                     mfer.canDetach = true;
                     ctx.mfers.push(mfer);
+                    if (ctx.addDamage) ctx.addDamage(carState.speed * 0.6);
                   }
                 } else {
                   still.push(pm);
@@ -443,7 +445,8 @@ export default function createTruckHitLevel(ctx) {
         RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(-30, 2.5, -1.5));
       const truckCollider = ctx.world.createCollider(
         RAPIER.ColliderDesc.cuboid(3.5, 1.4, 1.1).setMass(8000).setRestitution(0.1).setFriction(0.3)
-          .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS), truckBody);
+          .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
+          .setContactForceEventThreshold(800), truckBody);
 
       const truckState = {
         active: false, currentX: -30, speed: 22, hitMfer: false, justHit: false,
@@ -493,6 +496,7 @@ export default function createTruckHitLevel(ctx) {
                   ctx.captureImpactShot(mfer);
                   mfer.canDetach = true;
                   ctx.mfers.push(mfer);
+                  if (ctx.addDamage) ctx.addDamage(tv);
                 }
               } else {
                 remaining.push(pm);

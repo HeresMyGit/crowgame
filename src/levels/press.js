@@ -165,7 +165,8 @@ export default function createPressLevel(ctx) {
       ctx.world.createCollider(
         RAPIER.ColliderDesc.cuboid(plateW / 2, plateH / 2, plateD / 2)
           .setRestitution(0.05).setFriction(0.9)
-          .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS), plateBody);
+          .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
+          .setContactForceEventThreshold(800), plateBody);
 
       const pressState = {
         active: false, currentY: plateStartY, startY: plateStartY,
@@ -210,6 +211,7 @@ export default function createPressLevel(ctx) {
                 mfer.ragdollActive = true;
                 ctx.captureImpactShot(mfer);
                 ctx.mfers.push(mfer);
+                if (ctx.addDamage) ctx.addDamage(pressState.speed * 2);
               }
             }
             ctx.placedMfers = [];
