@@ -139,6 +139,13 @@ const MIXAMO_CLIP_PATHS = [
   '/animations',
   '/mixamo-sample',
 ];
+const HORDE_SCENE_LOOK = {
+  background: 0x05070f,
+  fogColor: 0x0b1020,
+  fogDensity: 0.028,
+  inheritedLightScale: 0.2,
+  toneExposure: 0.82,
+};
 const CAMERA_CONTROLS = {
   moveSpeed: 13,
   verticalSpeed: 9,
@@ -164,40 +171,335 @@ function makeBulletMesh() {
 
 function makeFloorMesh() {
   const group = new THREE.Group();
+  const terrainColor = 0x222c30;
+  const stoneColor = 0x7d8692;
+  const deadWoodColor = 0x3b322f;
+  const fenceColor = 0x47505f;
+  const mossColor = 0x223026;
 
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(TUNING.arenaHalfX * 2, TUNING.arenaHalfZ * 2),
-    new THREE.MeshStandardMaterial({ color: 0x203141, roughness: 0.9, metalness: 0.05 })
+  const terrainGeo = new THREE.PlaneGeometry(
+    TUNING.arenaHalfX * 2 + 24,
+    TUNING.arenaHalfZ * 2 + 24,
+    84,
+    64
   );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = TUNING.groundY;
-  floor.receiveShadow = true;
-  group.add(floor);
+  const terrainPos = terrainGeo.attributes.position;
+  for (let i = 0; i < terrainPos.count; i++) {
+    const x = terrainPos.getX(i);
+    const z = terrainPos.getY(i);
+    const swell =
+      Math.sin(x * 0.17) * 0.16 +
+      Math.cos(z * 0.21) * 0.13 +
+      Math.sin((x + z) * 0.11) * 0.11 +
+      (Math.random() - 0.5) * 0.04;
+    terrainPos.setZ(i, swell);
+  }
+  terrainGeo.computeVertexNormals();
 
-  const grid = new THREE.GridHelper(
-    TUNING.arenaHalfX * 2,
-    Math.round(TUNING.arenaHalfX * 2),
-    0x36536a,
-    0x2b4358
+  const terrain = new THREE.Mesh(
+    terrainGeo,
+    new THREE.MeshStandardMaterial({
+      color: terrainColor,
+      roughness: 0.98,
+      metalness: 0.02,
+    })
   );
-  grid.position.y = TUNING.groundY + 0.01;
-  group.add(grid);
+  terrain.rotation.x = -Math.PI / 2;
+  terrain.position.y = TUNING.groundY - 0.04;
+  terrain.receiveShadow = true;
+  group.add(terrain);
 
-  const border = new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.BoxGeometry(TUNING.arenaHalfX * 2, 0.02, TUNING.arenaHalfZ * 2)),
-    new THREE.LineBasicMaterial({ color: 0x4ecdc4 })
+  const graveyardGlow = new THREE.Mesh(
+    new THREE.RingGeometry(7.6, 19, 56),
+    new THREE.MeshBasicMaterial({
+      color: 0x2b3a52,
+      transparent: true,
+      opacity: 0.16,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
   );
-  border.position.y = TUNING.groundY + 0.02;
-  group.add(border);
+  graveyardGlow.rotation.x = -Math.PI / 2;
+  graveyardGlow.position.y = TUNING.groundY + 0.02;
+  group.add(graveyardGlow);
 
-  const platform = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.45, 1.7, 0.4, 16),
-    new THREE.MeshStandardMaterial({ color: 0x4e6d83, roughness: 0.78, metalness: 0.15 })
+  const moon = new THREE.Mesh(
+    new THREE.SphereGeometry(2.8, 30, 24),
+    new THREE.MeshStandardMaterial({
+      color: 0xdbe6ff,
+      emissive: 0x8ea8ff,
+      emissiveIntensity: 0.5,
+      roughness: 0.92,
+      metalness: 0,
+    })
   );
-  platform.position.set(TUNING.playerPos.x, TUNING.groundY + 0.2, TUNING.playerPos.z);
-  platform.castShadow = true;
-  platform.receiveShadow = true;
-  group.add(platform);
+  moon.position.set(27, 26, -30);
+  moon.receiveShadow = false;
+  moon.castShadow = false;
+  group.add(moon);
+
+  const moonHalo = new THREE.Mesh(
+    new THREE.SphereGeometry(3.7, 20, 14),
+    new THREE.MeshBasicMaterial({
+      color: 0x8ca5ff,
+      transparent: true,
+      opacity: 0.2,
+      side: THREE.BackSide,
+      depthWrite: false,
+    })
+  );
+  moon.add(moonHalo);
+
+  const arenaReadRing = new THREE.Mesh(
+    new THREE.RingGeometry(11.2, 16.2, 72),
+    new THREE.MeshBasicMaterial({
+      color: 0x7f95bf,
+      transparent: true,
+      opacity: 0.09,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  arenaReadRing.rotation.x = -Math.PI / 2;
+  arenaReadRing.position.y = TUNING.groundY + 0.016;
+  group.add(arenaReadRing);
+
+  const plinth = new THREE.Mesh(
+    new THREE.BoxGeometry(2.5, 0.38, 2.5),
+    new THREE.MeshStandardMaterial({
+      color: 0x555e6f,
+      roughness: 0.9,
+      metalness: 0.08,
+    })
+  );
+  plinth.position.set(TUNING.playerPos.x, TUNING.groundY + 0.19, TUNING.playerPos.z);
+  plinth.castShadow = true;
+  plinth.receiveShadow = true;
+  group.add(plinth);
+
+  const plinthTop = new THREE.Mesh(
+    new THREE.BoxGeometry(1.8, 0.14, 1.8),
+    new THREE.MeshStandardMaterial({
+      color: 0x6a7384,
+      roughness: 0.85,
+      metalness: 0.1,
+    })
+  );
+  plinthTop.position.set(TUNING.playerPos.x, TUNING.groundY + 0.45, TUNING.playerPos.z);
+  plinthTop.castShadow = true;
+  plinthTop.receiveShadow = true;
+  group.add(plinthTop);
+
+  const tombstoneMat = new THREE.MeshStandardMaterial({
+    color: stoneColor,
+    roughness: 0.92,
+    metalness: 0.03,
+  });
+  const tombstoneGeo = new THREE.BoxGeometry(0.52, 0.95, 0.16);
+  const tombstoneCapGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.09, 12);
+  const crossMat = new THREE.MeshStandardMaterial({
+    color: 0x6f7784,
+    roughness: 0.95,
+    metalness: 0.02,
+  });
+  const crossStemGeo = new THREE.BoxGeometry(0.08, 0.42, 0.08);
+  const crossBarGeo = new THREE.BoxGeometry(0.28, 0.08, 0.08);
+
+  const clearRadiusPlayer = 6.1;
+  const clearRadiusCenter = 6.2;
+  const graveCount = 96;
+  for (let i = 0; i < graveCount; i++) {
+    const x = THREE.MathUtils.randFloatSpread(TUNING.arenaHalfX * 2 + 12);
+    const z = THREE.MathUtils.randFloatSpread(TUNING.arenaHalfZ * 2 + 12);
+    const distPlayer = Math.hypot(x - TUNING.playerPos.x, z - TUNING.playerPos.z);
+    const distCenter = Math.hypot(x, z);
+    if (distPlayer < clearRadiusPlayer || distCenter < clearRadiusCenter) continue;
+
+    const grave = new THREE.Group();
+    const slab = new THREE.Mesh(tombstoneGeo, tombstoneMat);
+    slab.castShadow = true;
+    slab.receiveShadow = true;
+    grave.add(slab);
+
+    const cap = new THREE.Mesh(tombstoneCapGeo, tombstoneMat);
+    cap.position.y = 0.51;
+    cap.rotation.z = Math.PI / 2;
+    cap.castShadow = true;
+    cap.receiveShadow = true;
+    grave.add(cap);
+
+    if (Math.random() < 0.26) {
+      const crossStem = new THREE.Mesh(crossStemGeo, crossMat);
+      crossStem.position.set(0, 0.86, 0);
+      crossStem.castShadow = true;
+      grave.add(crossStem);
+
+      const crossBar = new THREE.Mesh(crossBarGeo, crossMat);
+      crossBar.position.set(0, 0.92, 0);
+      crossBar.castShadow = true;
+      grave.add(crossBar);
+    }
+
+    grave.position.set(x, TUNING.groundY + 0.44 + Math.random() * 0.06, z);
+    grave.rotation.y = Math.random() * Math.PI * 2;
+    grave.rotation.x = THREE.MathUtils.randFloat(-0.05, 0.05);
+    grave.rotation.z = THREE.MathUtils.randFloat(-0.08, 0.08);
+    const scale = THREE.MathUtils.randFloat(0.86, 1.28);
+    grave.scale.setScalar(scale);
+    group.add(grave);
+  }
+
+  const trunkMat = new THREE.MeshStandardMaterial({
+    color: deadWoodColor,
+    roughness: 0.96,
+    metalness: 0.03,
+  });
+  const branchMat = new THREE.MeshStandardMaterial({
+    color: 0x2b2725,
+    roughness: 0.97,
+    metalness: 0.01,
+  });
+  const trunkGeo = new THREE.CylinderGeometry(0.11, 0.2, 2.9, 7);
+  const branchGeo = new THREE.CylinderGeometry(0.03, 0.06, 1.15, 5);
+  const branchGeoLong = new THREE.CylinderGeometry(0.025, 0.05, 1.45, 5);
+  const treeCount = 16;
+  for (let i = 0; i < treeCount; i++) {
+    const angle = (i / treeCount) * Math.PI * 2 + THREE.MathUtils.randFloat(-0.12, 0.12);
+    const radiusX = TUNING.arenaHalfX + THREE.MathUtils.randFloat(5.7, 9.4);
+    const radiusZ = TUNING.arenaHalfZ + THREE.MathUtils.randFloat(5.2, 8.2);
+    const x = Math.cos(angle) * radiusX;
+    const z = Math.sin(angle) * radiusZ;
+    if (Math.hypot(x - TUNING.playerPos.x, z - TUNING.playerPos.z) < 8.4) continue;
+
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.castShadow = true;
+    trunk.receiveShadow = true;
+    tree.add(trunk);
+
+    const branchA = new THREE.Mesh(Math.random() < 0.5 ? branchGeo : branchGeoLong, branchMat);
+    branchA.position.y = 0.86;
+    branchA.rotation.z = THREE.MathUtils.randFloat(0.7, 1.25);
+    branchA.rotation.x = THREE.MathUtils.randFloat(-0.22, 0.22);
+    branchA.castShadow = true;
+    tree.add(branchA);
+
+    const branchB = new THREE.Mesh(Math.random() < 0.5 ? branchGeo : branchGeoLong, branchMat);
+    branchB.position.y = 0.52;
+    branchB.rotation.z = THREE.MathUtils.randFloat(-1.25, -0.7);
+    branchB.rotation.x = THREE.MathUtils.randFloat(-0.24, 0.24);
+    branchB.castShadow = true;
+    tree.add(branchB);
+
+    if (Math.random() < 0.58) {
+      const branchC = new THREE.Mesh(branchGeo, branchMat);
+      branchC.position.y = 1.18;
+      branchC.rotation.y = THREE.MathUtils.randFloat(0, Math.PI * 2);
+      branchC.rotation.z = THREE.MathUtils.randFloat(-1.05, 1.05);
+      branchC.castShadow = true;
+      tree.add(branchC);
+    }
+
+    const treeScale = THREE.MathUtils.randFloat(0.9, 1.5);
+    tree.scale.set(treeScale, treeScale * THREE.MathUtils.randFloat(0.9, 1.1), treeScale);
+    tree.position.set(x, TUNING.groundY + 1.38, z);
+    tree.rotation.y = Math.random() * Math.PI * 2;
+    tree.rotation.z = THREE.MathUtils.randFloat(-0.08, 0.08);
+    group.add(tree);
+  }
+
+  const fencePostGeo = new THREE.BoxGeometry(0.08, 1.15, 0.08);
+  const fenceRailGeo = new THREE.BoxGeometry(1.4, 0.07, 0.05);
+  const fenceMat = new THREE.MeshStandardMaterial({
+    color: fenceColor,
+    roughness: 0.84,
+    metalness: 0.48,
+  });
+  const postSpacing = 1.35;
+  const fenceInsetX = TUNING.arenaHalfX + 1.6;
+  const fenceInsetZ = TUNING.arenaHalfZ + 1.6;
+  const buildFenceRow = (fixedValue, start, end, isXAxisRow) => {
+    const span = end - start;
+    const postCount = Math.max(2, Math.floor(span / postSpacing));
+    for (let i = 0; i <= postCount; i++) {
+      const t = i / postCount;
+      const run = start + span * t;
+      const post = new THREE.Mesh(fencePostGeo, fenceMat);
+      post.position.set(
+        isXAxisRow ? run : fixedValue,
+        TUNING.groundY + 0.56,
+        isXAxisRow ? fixedValue : run
+      );
+      post.castShadow = true;
+      post.receiveShadow = true;
+      group.add(post);
+
+      if (i === postCount) continue;
+      const nextRun = start + span * ((i + 1) / postCount);
+      const segmentLen = Math.abs(nextRun - run);
+      if (segmentLen < 0.2) continue;
+
+      const railTop = new THREE.Mesh(fenceRailGeo, fenceMat);
+      const railMid = new THREE.Mesh(fenceRailGeo, fenceMat);
+      railTop.scale.x = segmentLen / 1.4;
+      railMid.scale.x = segmentLen / 1.4;
+      railTop.position.set(
+        isXAxisRow ? run + (nextRun - run) * 0.5 : fixedValue,
+        TUNING.groundY + 0.74,
+        isXAxisRow ? fixedValue : run + (nextRun - run) * 0.5
+      );
+      railMid.position.set(railTop.position.x, TUNING.groundY + 0.43, railTop.position.z);
+      if (!isXAxisRow) {
+        railTop.rotation.y = Math.PI / 2;
+        railMid.rotation.y = Math.PI / 2;
+      }
+      railTop.castShadow = true;
+      railMid.castShadow = true;
+      group.add(railTop, railMid);
+    }
+  };
+  buildFenceRow(-fenceInsetZ, -fenceInsetX, fenceInsetX, true);
+  buildFenceRow(fenceInsetZ, -fenceInsetX, fenceInsetX, true);
+  buildFenceRow(-fenceInsetX, -fenceInsetZ, fenceInsetZ, false);
+  buildFenceRow(fenceInsetX, -fenceInsetZ, fenceInsetZ, false);
+
+  const mistMat = new THREE.MeshBasicMaterial({
+    color: 0x6f83b6,
+    transparent: true,
+    opacity: 0.08,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const mistGeo = new THREE.CircleGeometry(1, 28);
+  for (let i = 0; i < 6; i++) {
+    const mist = new THREE.Mesh(mistGeo, mistMat);
+    const radius = THREE.MathUtils.randFloat(5.8, 16.4);
+    const angle = Math.random() * Math.PI * 2;
+    mist.position.set(
+      Math.cos(angle) * radius,
+      TUNING.groundY + THREE.MathUtils.randFloat(0.04, 0.09),
+      Math.sin(angle) * radius
+    );
+    const size = THREE.MathUtils.randFloat(3.2, 7.3);
+    mist.scale.set(size, size, size);
+    mist.rotation.x = -Math.PI / 2;
+    mist.rotation.z = Math.random() * Math.PI * 2;
+    group.add(mist);
+  }
+
+  const mossRing = new THREE.Mesh(
+    new THREE.RingGeometry(1.5, 3.2, 30),
+    new THREE.MeshStandardMaterial({
+      color: mossColor,
+      roughness: 1,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.58,
+    })
+  );
+  mossRing.rotation.x = -Math.PI / 2;
+  mossRing.position.set(TUNING.playerPos.x, TUNING.groundY + 0.01, TUNING.playerPos.z);
+  group.add(mossRing);
 
   return group;
 }
@@ -286,6 +588,13 @@ export default function createHordeMode(ctx) {
   let platformBody = null;
   let playerHurtBody = null;
   let playerHurtHandle = null;
+  let hordeLightRig = null;
+  const sceneLookState = {
+    background: null,
+    fog: null,
+    toneExposure: 1,
+    adjustedLights: [],
+  };
 
   let active = false;
   let isGameOver = false;
@@ -718,7 +1027,93 @@ export default function createHordeMode(ctx) {
     updateCameraReadout();
   }
 
+  function applyHordeSceneLighting() {
+    sceneLookState.background = scene.background;
+    sceneLookState.fog = scene.fog;
+    sceneLookState.toneExposure = renderer.toneMappingExposure;
+    sceneLookState.adjustedLights = [];
+
+    scene.traverse((obj) => {
+      if (!obj.isLight) return;
+      sceneLookState.adjustedLights.push({ light: obj, intensity: obj.intensity });
+      obj.intensity *= HORDE_SCENE_LOOK.inheritedLightScale;
+    });
+
+    scene.background = new THREE.Color(HORDE_SCENE_LOOK.background);
+    scene.fog = new THREE.FogExp2(HORDE_SCENE_LOOK.fogColor, HORDE_SCENE_LOOK.fogDensity);
+    renderer.toneMappingExposure = HORDE_SCENE_LOOK.toneExposure;
+
+    hordeLightRig = new THREE.Group();
+
+    const ambient = new THREE.AmbientLight(0x34466a, 0.58);
+    hordeLightRig.add(ambient);
+
+    const hemi = new THREE.HemisphereLight(0x5a74a7, 0x0b0e14, 0.78);
+    hordeLightRig.add(hemi);
+
+    const moonKey = new THREE.DirectionalLight(0xbacbff, 2.35);
+    moonKey.position.set(-14, 22, -10);
+    moonKey.castShadow = true;
+    moonKey.shadow.mapSize.set(2048, 2048);
+    moonKey.shadow.camera.near = 0.5;
+    moonKey.shadow.camera.far = 62;
+    moonKey.shadow.camera.left = -28;
+    moonKey.shadow.camera.right = 28;
+    moonKey.shadow.camera.top = 28;
+    moonKey.shadow.camera.bottom = -14;
+    moonKey.shadow.bias = -0.00045;
+    moonKey.shadow.normalBias = 0.02;
+    moonKey.target.position.set(0, 0.4, 0);
+    hordeLightRig.add(moonKey);
+    hordeLightRig.add(moonKey.target);
+
+    const rim = new THREE.DirectionalLight(0x8ea8df, 1.02);
+    rim.position.set(12, 6.5, 13);
+    hordeLightRig.add(rim);
+
+    const altarGlow = new THREE.PointLight(0x8aa0d8, 0.94, 28, 2);
+    altarGlow.position.set(TUNING.playerPos.x + 1.6, TUNING.groundY + 1.75, TUNING.playerPos.z - 0.4);
+    hordeLightRig.add(altarGlow);
+
+    scene.add(hordeLightRig);
+  }
+
+  function restoreSceneLighting() {
+    if (hordeLightRig) {
+      scene.remove(hordeLightRig);
+      hordeLightRig = null;
+    }
+
+    for (const entry of sceneLookState.adjustedLights) {
+      if (!entry?.light) continue;
+      entry.light.intensity = entry.intensity;
+    }
+    sceneLookState.adjustedLights = [];
+
+    scene.background = sceneLookState.background;
+    scene.fog = sceneLookState.fog;
+    renderer.toneMappingExposure = sceneLookState.toneExposure;
+  }
+
+  function disposeObjectTree(root) {
+    if (!root) return;
+    const geometries = new Set();
+    const materials = new Set();
+    root.traverse((child) => {
+      if (child.geometry) geometries.add(child.geometry);
+      if (!child.material) return;
+      if (Array.isArray(child.material)) {
+        for (const mat of child.material) materials.add(mat);
+      } else {
+        materials.add(child.material);
+      }
+    });
+    for (const geo of geometries) geo.dispose();
+    for (const mat of materials) mat.dispose();
+  }
+
   function setupArena() {
+    applyHordeSceneLighting();
     floorVisual = makeFloorMesh();
     scene.add(floorVisual);
 
@@ -756,16 +1151,7 @@ export default function createHordeMode(ctx) {
 
   function cleanupArena() {
     if (floorVisual) {
-      floorVisual.traverse((child) => {
-        if (child.geometry) child.geometry.dispose();
-        if (child.material) {
-          if (Array.isArray(child.material)) {
-            for (const mat of child.material) mat.dispose();
-          } else {
-            child.material.dispose();
-          }
-        }
-      });
+      disposeObjectTree(floorVisual);
       scene.remove(floorVisual);
       floorVisual = null;
     }
@@ -783,6 +1169,8 @@ export default function createHordeMode(ctx) {
       world.removeRigidBody(floorBody);
       floorBody = null;
     }
+
+    restoreSceneLighting();
   }
 
   function spawnPlayer() {
