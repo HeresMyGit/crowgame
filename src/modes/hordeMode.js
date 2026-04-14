@@ -140,11 +140,11 @@ const MIXAMO_CLIP_PATHS = [
   '/mixamo-sample',
 ];
 const HORDE_SCENE_LOOK = {
-  background: 0x05070f,
-  fogColor: 0x0b1020,
-  fogDensity: 0.028,
-  inheritedLightScale: 0.2,
-  toneExposure: 0.82,
+  background: 0x656a72,
+  fogColor: 0x273040,
+  fogDensity: 0.022,
+  inheritedLightScale: 0.22,
+  toneExposure: 0.92,
 };
 const ENEMY_PAUSE_CHANCE_SCALE = 0.25;
 const ENEMY_PAUSE_COOLDOWN_SCALE = 1.6;
@@ -171,10 +171,89 @@ function makeBulletMesh() {
   return mesh;
 }
 
+function createSartoshiSkyDome() {
+  const width = 2048;
+  const height = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
+  skyGrad.addColorStop(0, '#72767f');
+  skyGrad.addColorStop(0.58, '#6a6e77');
+  skyGrad.addColorStop(1, '#5f646d');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  for (let i = 0; i < 280; i++) {
+    const x = Math.random() * width;
+    const y = Math.random() * height * 0.72;
+    const size = THREE.MathUtils.randFloat(1.2, 4.8);
+    const twinkle = Math.random() * 0.35 + 0.65;
+    const color = Math.random() < 0.18 ? '#ffd65a' : '#ffc643';
+    ctx.globalAlpha = twinkle;
+    ctx.fillStyle = color;
+    if (Math.random() < 0.38) {
+      ctx.fillRect(x - size * 0.5, y - 0.5, size, 1.2);
+      ctx.fillRect(x - 0.5, y - size * 0.5, 1.2, size);
+    } else {
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  const moonX = width * 0.82;
+  const moonY = height * 0.205;
+  const outerR = 66;
+  const innerR = 52;
+  const carveR = 50;
+
+  ctx.fillStyle = '#111113';
+  ctx.beginPath();
+  ctx.arc(moonX, moonY, outerR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffc63d';
+  ctx.beginPath();
+  ctx.arc(moonX, moonY, innerR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#6a6e77';
+  ctx.beginPath();
+  ctx.arc(moonX + 22, moonY, carveR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#0d0d0f';
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.arc(moonX, moonY, outerR - 2, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(82, 64, 42),
+    new THREE.MeshBasicMaterial({
+      map: texture,
+      side: THREE.BackSide,
+      fog: false,
+      depthWrite: false,
+    })
+  );
+  dome.frustumCulled = false;
+  dome.renderOrder = -100;
+  dome.position.set(0, TUNING.groundY + 20, 0);
+  return dome;
+}
+
 function makeFloorMesh() {
   const group = new THREE.Group();
   const terrainColor = 0x222c30;
-  const stoneColor = 0x7d8692;
   const deadWoodColor = 0x3b322f;
   const fenceColor = 0x47505f;
   const mossColor = 0x223026;
@@ -225,32 +304,9 @@ function makeFloorMesh() {
   graveyardGlow.position.y = TUNING.groundY + 0.02;
   group.add(graveyardGlow);
 
-  const moon = new THREE.Mesh(
-    new THREE.SphereGeometry(2.8, 30, 24),
-    new THREE.MeshStandardMaterial({
-      color: 0xdbe6ff,
-      emissive: 0x8ea8ff,
-      emissiveIntensity: 0.5,
-      roughness: 0.92,
-      metalness: 0,
-    })
-  );
-  moon.position.set(27, 26, -30);
-  moon.receiveShadow = false;
-  moon.castShadow = false;
-  group.add(moon);
-
-  const moonHalo = new THREE.Mesh(
-    new THREE.SphereGeometry(3.7, 20, 14),
-    new THREE.MeshBasicMaterial({
-      color: 0x8ca5ff,
-      transparent: true,
-      opacity: 0.2,
-      side: THREE.BackSide,
-      depthWrite: false,
-    })
-  );
-  moon.add(moonHalo);
+  const skyDome = createSartoshiSkyDome();
+  group.userData.skyDome = skyDome;
+  group.add(skyDome);
 
   const arenaReadRing = new THREE.Mesh(
     new THREE.RingGeometry(11.2, 16.2, 72),
@@ -292,20 +348,95 @@ function makeFloorMesh() {
   plinthTop.receiveShadow = true;
   group.add(plinthTop);
 
-  const tombstoneMat = new THREE.MeshStandardMaterial({
-    color: stoneColor,
-    roughness: 0.92,
-    metalness: 0.03,
+  const drawArchedStonePath = (ctx, cx, baseY, width, height) => {
+    const half = width * 0.5;
+    const radius = half;
+    const arcBaseY = baseY - height + radius;
+    ctx.beginPath();
+    ctx.moveTo(cx - half, baseY);
+    ctx.lineTo(cx - half, arcBaseY);
+    ctx.quadraticCurveTo(cx - half, arcBaseY - radius, cx, arcBaseY - radius);
+    ctx.quadraticCurveTo(cx + half, arcBaseY - radius, cx + half, arcBaseY);
+    ctx.lineTo(cx + half, baseY);
+    ctx.closePath();
+  };
+
+  const makeGraveCardMaterial = (variant) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 384;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const cx = canvas.width * 0.5;
+    const baseY = 340;
+
+    if (variant === 'cross') {
+      ctx.fillStyle = '#12161f';
+      ctx.fillRect(cx - 38, baseY - 235, 76, 250);
+      ctx.fillRect(cx - 116, baseY - 168, 232, 72);
+
+      ctx.fillStyle = '#858d99';
+      ctx.fillRect(cx - 27, baseY - 222, 54, 218);
+      ctx.fillRect(cx - 88, baseY - 155, 176, 46);
+    } else {
+      const outerWidth = variant === 'short' ? 168 : 134;
+      const outerHeight = variant === 'short' ? 240 : 286;
+      drawArchedStonePath(ctx, cx, baseY, outerWidth, outerHeight);
+      ctx.fillStyle = '#12161f';
+      ctx.fill();
+
+      const innerWidth = outerWidth * 0.74;
+      const innerHeight = outerHeight * 0.78;
+      drawArchedStonePath(ctx, cx, baseY - 11, innerWidth, innerHeight);
+      ctx.fillStyle = '#868e9a';
+      ctx.fill();
+
+      if (Math.random() < 0.6) {
+        ctx.fillStyle = '#aeb5c2';
+        const dotA = variant === 'short' ? 16 : 18;
+        const dotB = variant === 'short' ? 13 : 15;
+        ctx.beginPath();
+        ctx.ellipse(cx - 18, baseY - (variant === 'short' ? 112 : 142), dotA, dotA * 0.68, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(cx + 14, baseY - (variant === 'short' ? 158 : 188), dotB, dotB * 0.66, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.fillStyle = '#0e131a';
+    ctx.beginPath();
+    ctx.ellipse(cx, baseY + 6, 102, 16, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      alphaTest: 0.45,
+      side: THREE.DoubleSide,
+      fog: true,
+      depthWrite: true,
+    });
+  };
+
+  const graveTallGeo = new THREE.PlaneGeometry(0.96, 1.44);
+  const graveShortGeo = new THREE.PlaneGeometry(1.05, 1.2);
+  const graveCrossGeo = new THREE.PlaneGeometry(1.02, 1.38);
+  const graveTallMat = makeGraveCardMaterial('tall');
+  const graveShortMat = makeGraveCardMaterial('short');
+  const graveCrossMat = makeGraveCardMaterial('cross');
+  const graveGroundPatchGeo = new THREE.CircleGeometry(0.34, 16);
+  const graveGroundPatchMat = new THREE.MeshBasicMaterial({
+    color: 0x10151d,
+    transparent: true,
+    opacity: 0.34,
+    depthWrite: false,
+    side: THREE.DoubleSide,
   });
-  const tombstoneGeo = new THREE.BoxGeometry(0.52, 0.95, 0.16);
-  const tombstoneCapGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.09, 12);
-  const crossMat = new THREE.MeshStandardMaterial({
-    color: 0x6f7784,
-    roughness: 0.95,
-    metalness: 0.02,
-  });
-  const crossStemGeo = new THREE.BoxGeometry(0.08, 0.42, 0.08);
-  const crossBarGeo = new THREE.BoxGeometry(0.28, 0.08, 0.08);
 
   const clearRadiusPlayer = 6.1;
   const clearRadiusCenter = 6.2;
@@ -318,36 +449,40 @@ function makeFloorMesh() {
     if (distPlayer < clearRadiusPlayer || distCenter < clearRadiusCenter) continue;
 
     const grave = new THREE.Group();
-    const slab = new THREE.Mesh(tombstoneGeo, tombstoneMat);
-    slab.castShadow = true;
-    slab.receiveShadow = true;
-    grave.add(slab);
-
-    const cap = new THREE.Mesh(tombstoneCapGeo, tombstoneMat);
-    cap.position.y = 0.51;
-    cap.rotation.z = Math.PI / 2;
-    cap.castShadow = true;
-    cap.receiveShadow = true;
-    grave.add(cap);
-
-    if (Math.random() < 0.26) {
-      const crossStem = new THREE.Mesh(crossStemGeo, crossMat);
-      crossStem.position.set(0, 0.86, 0);
-      crossStem.castShadow = true;
-      grave.add(crossStem);
-
-      const crossBar = new THREE.Mesh(crossBarGeo, crossMat);
-      crossBar.position.set(0, 0.92, 0);
-      crossBar.castShadow = true;
-      grave.add(crossBar);
+    let graveGeo = graveTallGeo;
+    let graveMat = graveTallMat;
+    let graveHeight = 1.44;
+    const variantRoll = Math.random();
+    if (variantRoll < 0.33) {
+      graveGeo = graveShortGeo;
+      graveMat = graveShortMat;
+      graveHeight = 1.2;
+    } else if (variantRoll > 0.9) {
+      graveGeo = graveCrossGeo;
+      graveMat = graveCrossMat;
+      graveHeight = 1.38;
     }
 
-    grave.position.set(x, TUNING.groundY + 0.44 + Math.random() * 0.06, z);
-    grave.rotation.y = Math.random() * Math.PI * 2;
-    grave.rotation.x = THREE.MathUtils.randFloat(-0.05, 0.05);
-    grave.rotation.z = THREE.MathUtils.randFloat(-0.08, 0.08);
-    const scale = THREE.MathUtils.randFloat(0.86, 1.28);
-    grave.scale.setScalar(scale);
+    const stone = new THREE.Mesh(graveGeo, graveMat);
+    stone.castShadow = false;
+    stone.receiveShadow = false;
+    stone.position.y = graveHeight * 0.5 - THREE.MathUtils.randFloat(0.08, 0.2);
+    stone.position.z = 0.02;
+    stone.rotation.z = THREE.MathUtils.randFloat(-0.075, 0.075);
+    grave.add(stone);
+
+    const groundPatch = new THREE.Mesh(graveGroundPatchGeo, graveGroundPatchMat);
+    groundPatch.rotation.x = -Math.PI / 2;
+    groundPatch.position.y = 0.015;
+    const patchScale = THREE.MathUtils.randFloat(0.84, 1.26);
+    groundPatch.scale.set(patchScale * 1.15, patchScale, patchScale);
+    grave.add(groundPatch);
+
+    grave.position.set(x, TUNING.groundY, z);
+    const faceCenterYaw = Math.atan2(-x, -z);
+    grave.rotation.y = faceCenterYaw + THREE.MathUtils.randFloat(-0.95, 0.95);
+    const scale = THREE.MathUtils.randFloat(0.86, 1.18);
+    grave.scale.set(scale, scale * THREE.MathUtils.randFloat(0.92, 1.06), scale);
     group.add(grave);
   }
 
@@ -1053,13 +1188,13 @@ export default function createHordeMode(ctx) {
 
     hordeLightRig = new THREE.Group();
 
-    const ambient = new THREE.AmbientLight(0x34466a, 0.58);
+    const ambient = new THREE.AmbientLight(0x3c4f76, 0.64);
     hordeLightRig.add(ambient);
 
-    const hemi = new THREE.HemisphereLight(0x5a74a7, 0x0b0e14, 0.78);
+    const hemi = new THREE.HemisphereLight(0x6c87bf, 0x0d111b, 0.9);
     hordeLightRig.add(hemi);
 
-    const moonKey = new THREE.DirectionalLight(0xbacbff, 2.35);
+    const moonKey = new THREE.DirectionalLight(0xc8d6ff, 2.75);
     moonKey.position.set(-14, 22, -10);
     moonKey.castShadow = true;
     moonKey.shadow.mapSize.set(2048, 2048);
@@ -1075,11 +1210,11 @@ export default function createHordeMode(ctx) {
     hordeLightRig.add(moonKey);
     hordeLightRig.add(moonKey.target);
 
-    const rim = new THREE.DirectionalLight(0x8ea8df, 1.02);
+    const rim = new THREE.DirectionalLight(0x9db5ea, 1.14);
     rim.position.set(12, 6.5, 13);
     hordeLightRig.add(rim);
 
-    const altarGlow = new THREE.PointLight(0x8aa0d8, 0.94, 28, 2);
+    const altarGlow = new THREE.PointLight(0x97acd9, 1.08, 30, 2);
     altarGlow.position.set(TUNING.playerPos.x + 1.6, TUNING.groundY + 1.75, TUNING.playerPos.z - 0.4);
     hordeLightRig.add(altarGlow);
 
