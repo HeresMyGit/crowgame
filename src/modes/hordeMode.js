@@ -34,23 +34,110 @@ const CAMERA_PRESETS = {
   shoulder: { pos: [-20.71, 4.53, 15.58], lookAt: [-8.41, -2.06, 4.2] },
   sideline: { pos: [24, 9.2, 0], lookAt: [-2, 1.2, 0] },
 };
-const MIXAMO_FILES = [
-  'Standing_Idle',
-  'General_Conversation',
-  'Happy_Walking_Forward_InPlace',
-  'Boxing_Taunt',
-  'Being_Terrified_While_Standing',
-  'Male_Cheering_With_Two_Fists_Pump',
-];
-const PLAYER_ANIMATION_POOL = [
+const PLAYER_IDLE_CLIP_PREFERENCES = [
+  'Idle_With_Aimed_Pistol',
   'Standing_Idle',
   'General_Conversation',
 ];
-const ENEMY_ANIMATION_POOL = [
-  'Happy_Walking_Forward_InPlace',
-  'Boxing_Taunt',
-  'Being_Terrified_While_Standing',
-  'Male_Cheering_With_Two_Fists_Pump',
+const ENEMY_MOVESETS = [
+  {
+    id: 'walk',
+    weight: 0.36,
+    moveClip: 'Walking_Forward_InPlace',
+    moveClipTimeScale: 1,
+    speedMultiplier: 0.88,
+    pauseChance: 0.2,
+    pauseCheckMin: 1.8,
+    pauseCheckMax: 3.6,
+    pauseDurationMin: 0.9,
+    pauseDurationMax: 2.2,
+    pauseClips: [
+      'Standing_Idle_Looking_Around',
+      'Being_Terrified_While_Standing',
+      'Boxing_Taunt',
+    ],
+  },
+  {
+    id: 'happy_walk',
+    weight: 0.2,
+    moveClip: 'Happy_Walking_Forward_InPlace',
+    moveClipTimeScale: 1.2,
+    speedMultiplier: 0.98,
+    pauseChance: 0.18,
+    pauseCheckMin: 2,
+    pauseCheckMax: 3.8,
+    pauseDurationMin: 0.8,
+    pauseDurationMax: 1.8,
+    pauseClips: [
+      'Male_Cheering_With_Two_Fists_Pump',
+      'Boxing_Taunt',
+      'Standing_Idle_Looking_Around',
+    ],
+  },
+  {
+    id: 'run',
+    weight: 0.24,
+    moveClip: 'Slow_Run_Forward_InPlace',
+    moveClipTimeScale: 1.08,
+    speedMultiplier: 1.38,
+    pauseChance: 0.12,
+    pauseCheckMin: 1.4,
+    pauseCheckMax: 2.7,
+    pauseDurationMin: 0.6,
+    pauseDurationMax: 1.25,
+    pauseClips: [
+      'Boxing_Taunt',
+      'Standing_Idle_Looking_Around',
+    ],
+  },
+  {
+    id: 'zombie_walk',
+    weight: 0.15,
+    moveClip: 'Zombie_Walking_InPlace',
+    moveClipTimeScale: 0.92,
+    speedMultiplier: 0.74,
+    pauseChance: 0.32,
+    pauseCheckMin: 1.7,
+    pauseCheckMax: 3.3,
+    pauseDurationMin: 1.1,
+    pauseDurationMax: 2.5,
+    pauseClips: [
+      'Zombie_Standing_Idle',
+      'Zombie_Looking_Around',
+      'Zombie_Scratching_Idle',
+      'Zombie_Twitching_Idle',
+    ],
+  },
+  {
+    id: 'zombie_run',
+    weight: 0.05,
+    moveClip: 'Zombie_Run',
+    moveClipTimeScale: 1,
+    speedMultiplier: 1.06,
+    pauseChance: 0.16,
+    pauseCheckMin: 1.5,
+    pauseCheckMax: 2.8,
+    pauseDurationMin: 0.8,
+    pauseDurationMax: 1.6,
+    pauseClips: [
+      'Zombie_Screaming',
+      'Zombie_Looking_Around',
+      'Zombie_Standing_Idle',
+    ],
+  },
+];
+const ENEMY_PAUSE_MIN_DISTANCE = 3.4;
+const ENEMY_MIXER_TIME_SCALE = 0.65;
+const MIXAMO_FILES = Array.from(
+  new Set([
+    ...PLAYER_IDLE_CLIP_PREFERENCES,
+    ...ENEMY_MOVESETS.map((set) => set.moveClip),
+    ...ENEMY_MOVESETS.flatMap((set) => set.pauseClips),
+  ])
+);
+const MIXAMO_CLIP_PATHS = [
+  '/animations',
+  '/mixamo-sample',
 ];
 const CAMERA_CONTROLS = {
   moveSpeed: 13,
@@ -135,6 +222,37 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function randomRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function pickWeighted(items, weightKey = 'weight') {
+  const total = items.reduce((sum, item) => sum + Math.max(0, item[weightKey] ?? 0), 0);
+  if (total <= 0) return items[0];
+  let roll = Math.random() * total;
+  for (const item of items) {
+    roll -= Math.max(0, item[weightKey] ?? 0);
+    if (roll <= 0) return item;
+  }
+  return items[items.length - 1];
+}
+
+function applyHordeEyeOverride(targetScene) {
+  if (!targetScene) return;
+
+  const normalEyeMeshes = [];
+  const redEyeMeshes = [];
+  targetScene.traverse((child) => {
+    if (!child.isMesh) return;
+    if (child.name === 'eyes_normal') normalEyeMeshes.push(child);
+    if (child.name === 'eyes_red') redEyeMeshes.push(child);
+  });
+
+  if (!normalEyeMeshes.some((mesh) => mesh.visible)) return;
+  for (const mesh of normalEyeMeshes) mesh.visible = false;
+  for (const mesh of redEyeMeshes) mesh.visible = true;
+}
+
 export default function createHordeMode(ctx) {
   const {
     RAPIER,
@@ -208,7 +326,57 @@ export default function createHordeMode(ctx) {
         track.values[i + 2] = baseZ;
       }
     }
+    ensureClipStartsAtZero(clip);
     return clip;
+  }
+
+  function ensureClipStartsAtZero(clip) {
+    const EPS = 0.0001;
+    for (const track of clip.tracks) {
+      if (!track?.times?.length || !track?.values?.length) continue;
+      if (track.times[0] <= EPS) continue;
+
+      const valueSize = track.values.length / track.times.length;
+      if (!Number.isFinite(valueSize) || valueSize <= 0) continue;
+
+      const TimesCtor = track.times.constructor;
+      const ValuesCtor = track.values.constructor;
+
+      const newTimes = new TimesCtor(track.times.length + 1);
+      newTimes[0] = 0;
+      newTimes.set(track.times, 1);
+
+      const newValues = new ValuesCtor(track.values.length + valueSize);
+      for (let i = 0; i < valueSize; i++) {
+        newValues[i] = track.values[i];
+      }
+      newValues.set(track.values, valueSize);
+
+      track.times = newTimes;
+      track.values = newValues;
+    }
+
+    clip.resetDuration();
+  }
+
+  async function loadMixamoClipWithFallback(loader, clipName) {
+    let lastErr = null;
+    for (const basePath of MIXAMO_CLIP_PATHS) {
+      try {
+        const fbx = await loader.loadAsync(`${basePath}/${clipName}.fbx`);
+        const srcClip = fbx.animations?.[0];
+        if (!srcClip) return null;
+        const clip = makeInPlaceClip(srcClip);
+        clip.name = clipName;
+        return clip;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (lastErr) {
+      console.warn(`[horde] failed to load animation ${clipName}`, lastErr);
+    }
+    return null;
   }
 
   async function loadMixamoClips() {
@@ -216,16 +384,8 @@ export default function createHordeMode(ctx) {
 
     const loader = new FBXLoader();
     mixamoLoadPromise = Promise.all(MIXAMO_FILES.map(async (name) => {
-      try {
-        const fbx = await loader.loadAsync(`/mixamo-sample/${name}.fbx`);
-        const srcClip = fbx.animations?.[0];
-        if (!srcClip) return;
-        const clip = makeInPlaceClip(srcClip);
-        clip.name = name;
-        mixamoClips.set(name, clip);
-      } catch (err) {
-        console.warn(`[horde] failed to load animation ${name}`, err);
-      }
+      const clip = await loadMixamoClipWithFallback(loader, name);
+      if (clip) mixamoClips.set(name, clip);
     })).then(() => {
       mixamoLoaded = mixamoClips.size > 0;
     });
@@ -233,32 +393,143 @@ export default function createHordeMode(ctx) {
     return mixamoLoadPromise;
   }
 
-  function playMixamoClip(actor, clipName) {
+  function playMixamoClip(actor, clipName, {
+    loop = THREE.LoopRepeat,
+    repetitions = Infinity,
+    clampWhenFinished = false,
+    timeScale = 1,
+    fadeDuration = 0.2,
+    forceRestart = false,
+  } = {}) {
     if (!actor?.mixer) return;
     const clip = mixamoClips.get(clipName);
     if (!clip) return;
+    const isFirstMixamoBind = !actor.currentAction;
 
-    actor.mixer.stopAllAction();
-    const action = actor.mixer.clipAction(clip);
-    action.reset();
-    action.setLoop(THREE.LoopRepeat, Infinity);
-    action.clampWhenFinished = false;
-    action.timeScale = clipName.includes('Happy_Walking') ? 1.25 : 1;
-    action.play();
+    if (!forceRestart && actor.currentClipName === clipName && actor.currentAction) {
+      actor.currentAction.setLoop(loop, repetitions);
+      actor.currentAction.clampWhenFinished = clampWhenFinished;
+      actor.currentAction.timeScale = timeScale;
+      return;
+    }
+
+    // The base GLB idle action is already playing on new spawns.
+    // Clear it once before we start tracked mixamo transitions.
+    if (isFirstMixamoBind) {
+      actor.mixer.stopAllAction();
+    }
+
+    const nextAction = actor.mixer.clipAction(clip);
+    nextAction.enabled = true;
+    nextAction.setEffectiveWeight(1);
+    nextAction.setEffectiveTimeScale(timeScale);
+    nextAction.setLoop(loop, repetitions);
+    nextAction.clampWhenFinished = clampWhenFinished;
+    nextAction.reset();
+    const startOffset = Math.min(0.02, Math.max(0, clip.duration - 0.001));
+    if (startOffset > 0) nextAction.time = startOffset;
+    nextAction.play();
+
+    const prevAction = actor.currentAction;
+    if (prevAction && prevAction !== nextAction) {
+      if (fadeDuration > 0) {
+        nextAction.crossFadeFrom(prevAction, fadeDuration, false);
+      } else {
+        prevAction.stop();
+      }
+    }
+
+    actor.currentAction = nextAction;
     actor.currentClipName = clipName;
+    actor.mixer.update(0);
+  }
+
+  function playEnemyMoveClip(enemy) {
+    if (!enemy?.moveSet) return;
+    playMixamoClip(enemy, enemy.moveSet.moveClip, {
+      loop: THREE.LoopRepeat,
+      repetitions: Infinity,
+      clampWhenFinished: false,
+      timeScale: enemy.moveSet.moveClipTimeScale,
+      fadeDuration: 0.2,
+    });
+  }
+
+  function resolvePlayableMoveSet(preferred = null) {
+    if (!mixamoLoaded) return preferred || pickWeighted(ENEMY_MOVESETS);
+    if (preferred && mixamoClips.has(preferred.moveClip)) return preferred;
+
+    const available = ENEMY_MOVESETS.filter((set) => mixamoClips.has(set.moveClip));
+    if (!available.length) return preferred || pickWeighted(ENEMY_MOVESETS);
+    return pickWeighted(available);
+  }
+
+  function pickPauseClipForMoveSet(moveSet) {
+    if (!moveSet?.pauseClips?.length) return null;
+    if (!mixamoLoaded) return pick(moveSet.pauseClips);
+
+    const available = moveSet.pauseClips.filter((clipName) => mixamoClips.has(clipName));
+    if (!available.length) return null;
+    return pick(available);
+  }
+
+  function playEnemyPauseClip(enemy) {
+    if (!enemy?.pauseClipName) return;
+    const clip = mixamoClips.get(enemy.pauseClipName);
+    if (!clip) return;
+    playMixamoClip(enemy, enemy.pauseClipName, {
+      loop: THREE.LoopOnce,
+      repetitions: 1,
+      clampWhenFinished: true,
+      timeScale: enemy.pauseClipTimeScale || 1,
+      fadeDuration: 0.14,
+    });
+    if (clip.duration > 0.0001) {
+      const duration = clip.duration / (enemy.pauseClipTimeScale || 1);
+      enemy.pauseTimer = Math.max(enemy.pauseTimer, duration + 0.05);
+    }
+  }
+
+  function resolvePlayerIdleClip() {
+    if (!mixamoLoaded) return player?.desiredClipName || PLAYER_IDLE_CLIP_PREFERENCES[0];
+    for (const clipName of PLAYER_IDLE_CLIP_PREFERENCES) {
+      if (mixamoClips.has(clipName)) return clipName;
+    }
+    return player?.desiredClipName || PLAYER_IDLE_CLIP_PREFERENCES[PLAYER_IDLE_CLIP_PREFERENCES.length - 1];
+  }
+
+  function playPlayerIdleClip(fadeDuration = 0.18) {
+    if (!player) return;
+    const idleClip = resolvePlayerIdleClip();
+    player.desiredClipName = idleClip;
+    if (!mixamoLoaded) return;
+    playMixamoClip(player, idleClip, {
+      loop: THREE.LoopRepeat,
+      repetitions: Infinity,
+      clampWhenFinished: false,
+      timeScale: 1,
+      fadeDuration,
+    });
   }
 
   function applyLoadedAnimationsToActiveActors() {
     if (!active || !mixamoLoaded) return;
 
-    if (player?.desiredClipName) {
-      playMixamoClip(player, player.desiredClipName);
+    if (player) {
+      playPlayerIdleClip(0.08);
     }
     for (const enemy of enemies) {
-      if (!enemy.desiredClipName) {
-        enemy.desiredClipName = pick(ENEMY_ANIMATION_POOL);
+      const nextMoveSet = resolvePlayableMoveSet(enemy.moveSet);
+      if (nextMoveSet !== enemy.moveSet) {
+        enemy.moveSet = nextMoveSet;
+        enemy.speed = enemy.baseSpeed * nextMoveSet.speedMultiplier;
+        enemy.pauseCooldown = randomRange(nextMoveSet.pauseCheckMin, nextMoveSet.pauseCheckMax);
       }
-      playMixamoClip(enemy, enemy.desiredClipName);
+      if (enemy.state === 'pausing' && enemy.pauseClipName) {
+        playEnemyPauseClip(enemy);
+      } else {
+        playEnemyMoveClip(enemy);
+      }
     }
   }
 
@@ -523,8 +794,9 @@ export default function createHordeMode(ctx) {
       y: Math.atan2(TUNING.playerFacing.x, TUNING.playerFacing.z),
     });
     if (!player) return;
-    player.desiredClipName = pick(PLAYER_ANIMATION_POOL);
-    if (mixamoLoaded) playMixamoClip(player, player.desiredClipName);
+    applyHordeEyeOverride(player.scene);
+    player.desiredClipName = resolvePlayerIdleClip();
+    if (mixamoLoaded) playPlayerIdleClip(0);
   }
 
   function cleanupPlayer() {
@@ -540,11 +812,21 @@ export default function createHordeMode(ctx) {
     const spawnPos = randomSpawnPoint();
     const enemyPm = spawnIdleMfer(spawnPos);
     if (!enemyPm) return;
+    applyHordeEyeOverride(enemyPm.scene);
 
-    const speed = TUNING.enemyBaseSpeed + elapsed * TUNING.enemySpeedRamp + Math.random() * 0.7;
+    const moveSet = resolvePlayableMoveSet();
+    const baseSpeed = TUNING.enemyBaseSpeed + elapsed * TUNING.enemySpeedRamp + Math.random() * 0.7;
+    const speed = baseSpeed * moveSet.speedMultiplier;
     enemyPm.scene.rotation.y = Math.atan2(TUNING.playerPos.x - spawnPos.x, TUNING.playerPos.z - spawnPos.z);
-    enemyPm.desiredClipName = pick(ENEMY_ANIMATION_POOL);
-    if (mixamoLoaded) playMixamoClip(enemyPm, enemyPm.desiredClipName);
+    enemyPm.desiredClipName = moveSet.moveClip;
+    if (mixamoLoaded) {
+      playMixamoClip(enemyPm, moveSet.moveClip, {
+        loop: THREE.LoopRepeat,
+        repetitions: Infinity,
+        clampWhenFinished: false,
+        timeScale: moveSet.moveClipTimeScale,
+      });
+    }
 
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(spawnPos.x, TUNING.playerHurtY, spawnPos.z)
@@ -558,10 +840,17 @@ export default function createHordeMode(ctx) {
     enemies.push({
       scene: enemyPm.scene,
       mixer: enemyPm.mixer,
-      desiredClipName: enemyPm.desiredClipName,
+      desiredClipName: moveSet.moveClip,
+      moveSet,
+      state: 'moving',
+      pauseTimer: 0,
+      pauseCooldown: randomRange(moveSet.pauseCheckMin, moveSet.pauseCheckMax),
+      pauseClipName: null,
+      pauseClipTimeScale: 1,
       body,
       colliderHandle: collider.handle,
       pos: spawnPos,
+      baseSpeed,
       speed,
     });
     enemyColliderHandles.add(collider.handle);
@@ -678,27 +967,63 @@ export default function createHordeMode(ctx) {
   function updateEnemies(delta) {
     for (let i = enemies.length - 1; i >= 0; i--) {
       const enemy = enemies[i];
-      if (enemy.mixer) enemy.mixer.update(delta * 0.65);
+      if (enemy.mixer) enemy.mixer.update(delta * ENEMY_MIXER_TIME_SCALE);
 
       const dx = TUNING.playerPos.x - enemy.pos.x;
       const dz = TUNING.playerPos.z - enemy.pos.z;
       const dist = Math.hypot(dx, dz);
       if (dist < 0.0001) continue;
 
-      const step = Math.min(dist, enemy.speed * delta);
-      const nx = enemy.pos.x + (dx / dist) * step;
-      const nz = enemy.pos.z + (dz / dist) * step;
-      const moveX = nx - enemy.pos.x;
-      const moveZ = nz - enemy.pos.z;
-
-      enemy.pos.x = nx;
-      enemy.pos.z = nz;
-      enemy.scene.position.x += moveX;
-      enemy.scene.position.z += moveZ;
       enemy.scene.rotation.y = Math.atan2(dx, dz);
-      enemy.body.setNextKinematicTranslation({ x: nx, y: TUNING.playerHurtY, z: nz });
 
-      if (dist <= TUNING.playerTouchDistance) {
+      if (enemy.state === 'pausing') {
+        enemy.pauseTimer -= delta;
+        enemy.body.setNextKinematicTranslation({ x: enemy.pos.x, y: TUNING.playerHurtY, z: enemy.pos.z });
+
+        if (enemy.pauseTimer <= 0) {
+          enemy.state = 'moving';
+          enemy.pauseClipName = null;
+          enemy.pauseCooldown = randomRange(enemy.moveSet.pauseCheckMin, enemy.moveSet.pauseCheckMax);
+          if (mixamoLoaded) playEnemyMoveClip(enemy);
+        }
+      } else {
+        enemy.pauseCooldown -= delta;
+        if (
+          enemy.pauseCooldown <= 0 &&
+          dist > ENEMY_PAUSE_MIN_DISTANCE &&
+          Math.random() < enemy.moveSet.pauseChance
+        ) {
+          const pauseClipName = pickPauseClipForMoveSet(enemy.moveSet);
+          if (!pauseClipName) {
+            enemy.pauseCooldown = randomRange(enemy.moveSet.pauseCheckMin, enemy.moveSet.pauseCheckMax);
+          } else {
+            enemy.state = 'pausing';
+            enemy.pauseTimer = randomRange(enemy.moveSet.pauseDurationMin, enemy.moveSet.pauseDurationMax);
+            enemy.pauseClipName = pauseClipName;
+            enemy.pauseClipTimeScale = randomRange(0.92, 1.08);
+            enemy.pauseCooldown = randomRange(enemy.moveSet.pauseCheckMin, enemy.moveSet.pauseCheckMax);
+            if (mixamoLoaded) playEnemyPauseClip(enemy);
+            enemy.body.setNextKinematicTranslation({ x: enemy.pos.x, y: TUNING.playerHurtY, z: enemy.pos.z });
+            continue;
+          }
+        }
+
+        const step = Math.min(dist, enemy.speed * delta);
+        const nx = enemy.pos.x + (dx / dist) * step;
+        const nz = enemy.pos.z + (dz / dist) * step;
+        const moveX = nx - enemy.pos.x;
+        const moveZ = nz - enemy.pos.z;
+
+        enemy.pos.x = nx;
+        enemy.pos.z = nz;
+        enemy.scene.position.x += moveX;
+        enemy.scene.position.z += moveZ;
+        enemy.body.setNextKinematicTranslation({ x: nx, y: TUNING.playerHurtY, z: nz });
+      }
+
+      const playerDx = TUNING.playerPos.x - enemy.pos.x;
+      const playerDz = TUNING.playerPos.z - enemy.pos.z;
+      if (Math.hypot(playerDx, playerDz) <= TUNING.playerTouchDistance) {
         isGameOver = true;
       }
     }
