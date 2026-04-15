@@ -243,6 +243,8 @@
       align-items: stretch;
       justify-content: center;
       padding: clamp(18px, 3vw, 32px);
+      overflow-y: auto;
+      overflow-x: hidden;
       opacity: 0;
       pointer-events: none;
       transition: opacity 220ms ease;
@@ -253,7 +255,7 @@
     }
     #main-menu::before {
       content: '';
-      position: absolute;
+      position: fixed;
       inset: 0;
       z-index: 0;
       pointer-events: none;
@@ -264,7 +266,7 @@
     }
     #main-menu::after {
       content: '';
-      position: absolute;
+      position: fixed;
       inset: 0;
       z-index: 0;
       pointer-events: none;
@@ -279,7 +281,7 @@
       position: relative;
       z-index: 1;
       width: min(1280px, 100%);
-      min-height: 100%;
+      min-height: fit-content;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -636,6 +638,26 @@
       .game-card { padding: 18px 18px 16px; }
       .action-btn { padding: 8px 14px; font-size: 13px; }
       .level-btn { padding: 6px 8px; font-size: 10px; }
+    }
+    @media (max-height: 860px) {
+      #main-menu {
+        align-items: flex-start;
+        padding-top: 14px;
+        padding-bottom: 14px;
+      }
+      #menu-content {
+        min-height: auto;
+        justify-content: flex-start;
+        gap: 20px;
+      }
+      #menu-title { margin-top: 12px; }
+      #menu-copy { margin-top: 8px; }
+      #menu-games-shell { align-self: stretch; }
+      #menu-games { padding: 18px; }
+      .game-card { padding: 18px 18px 16px; }
+      .game-card-title { margin-top: 14px; }
+      .game-card-description { margin-top: 12px; }
+      .game-card-cta { margin-top: 14px; }
     }
   </style>
 </head>
