@@ -7,6 +7,12 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
 
 const MODEL_URL = 'https://sfo3.digitaloceanspaces.com/cybermfers/cybermfers/builders/mfermashup.glb';
+const TOUCH_DEVICE = window.matchMedia('(pointer: coarse)').matches
+  || navigator.maxTouchPoints > 0
+  || 'ontouchstart' in window;
+const MOBILE_GRAPHICS_MODE = TOUCH_DEVICE;
+const MAX_RENDER_PIXEL_RATIO = MOBILE_GRAPHICS_MODE ? 1.2 : 2;
+const USE_POST_PROCESSING = !MOBILE_GRAPHICS_MODE;
 
 const QUEST_GIVER_VISIBLE_MESHES = new Set([
   'type_plain',
@@ -45,7 +51,11 @@ const MENU_CAMERA_RADIUS = 34;
 const MENU_CAMERA_HEIGHT = 16.5;
 const MENU_CAMERA_ORBIT_SPEED = 0.13;
 const SKY_RADIUS = 560;
-const ATMOSPHERE_PARTICLE_COUNT = 280;
+const ATMOSPHERE_PARTICLE_COUNT = MOBILE_GRAPHICS_MODE ? 140 : 280;
+const ATMOSPHERE_CLOUD_COUNT = MOBILE_GRAPHICS_MODE ? 14 : 22;
+const ATMOSPHERE_HAZE_COUNT = MOBILE_GRAPHICS_MODE ? 4 : 6;
+const MENU_PARTICLE_COUNT = MOBILE_GRAPHICS_MODE ? 170 : 280;
+const TREE_COUNT = MOBILE_GRAPHICS_MODE ? 40 : 56;
 const MOBILE_STICK_MAX_PIXELS = 46;
 const MOBILE_LOOK_SENSITIVITY = 0.005;
 
@@ -231,15 +241,11 @@ const mobileAimBtnEl = document.getElementById('mobile-aim-btn');
 const mobileInventoryBtnEl = document.getElementById('mobile-inventory-btn');
 const mobileCraftingBtnEl = document.getElementById('mobile-crafting-btn');
 
-const TOUCH_DEVICE = window.matchMedia('(pointer: coarse)').matches
-  || navigator.maxTouchPoints > 0
-  || 'ontouchstart' in window;
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ antialias: !MOBILE_GRAPHICS_MODE, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_RENDER_PIXEL_RATIO));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.VSMShadowMap;
+renderer.shadowMap.type = MOBILE_GRAPHICS_MODE ? THREE.PCFShadowMap : THREE.VSMShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.38;
@@ -254,15 +260,19 @@ scene.fog = new THREE.FogExp2(0xc8ddf0, 0.00165);
 
 const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 700);
 const clock = new THREE.Clock();
-const composer = new EffectComposer(renderer);
-const renderPass = new RenderPass(scene, camera);
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.28, 0.62, 0.8);
-const vignettePass = new ShaderPass(VignetteShader);
-composer.addPass(renderPass);
-composer.addPass(bloomPass);
-composer.addPass(vignettePass);
-vignettePass.uniforms.offset.value = 0.96;
-vignettePass.uniforms.darkness.value = 0.74;
+const composer = USE_POST_PROCESSING ? new EffectComposer(renderer) : null;
+const renderPass = USE_POST_PROCESSING ? new RenderPass(scene, camera) : null;
+const bloomPass = USE_POST_PROCESSING
+  ? new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.28, 0.62, 0.8)
+  : null;
+const vignettePass = USE_POST_PROCESSING ? new ShaderPass(VignetteShader) : null;
+if (USE_POST_PROCESSING) {
+  composer.addPass(renderPass);
+  composer.addPass(bloomPass);
+  composer.addPass(vignettePass);
+  vignettePass.uniforms.offset.value = 0.96;
+  vignettePass.uniforms.darkness.value = 0.74;
+}
 
 const visualAssets = createVisualAssets();
 const atmosphereState = {
@@ -443,7 +453,7 @@ function addSkyAtmosphere() {
 
 function addAtmosphereDetails() {
   const cloudTexture = visualAssets.cloudSprite;
-  for (let i = 0; i < 22; i += 1) {
+  for (let i = 0; i < ATMOSPHERE_CLOUD_COUNT; i += 1) {
     const sprite = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: cloudTexture,
@@ -466,7 +476,7 @@ function addAtmosphereDetails() {
     scene.add(sprite);
   }
 
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < ATMOSPHERE_HAZE_COUNT; i += 1) {
     const haze = new THREE.Mesh(
       new THREE.TorusGeometry(92 + i * 16, 4.6 + i * 0.4, 12, 96),
       new THREE.MeshBasicMaterial({
@@ -520,7 +530,7 @@ function addLights() {
   const sun = new THREE.DirectionalLight(0xfff4d8, 2.42);
   sun.position.set(52, 92, 38);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.mapSize.set(MOBILE_GRAPHICS_MODE ? 2048 : 4096, MOBILE_GRAPHICS_MODE ? 2048 : 4096);
   sun.shadow.camera.left = -128;
   sun.shadow.camera.right = 128;
   sun.shadow.camera.top = 128;
@@ -895,7 +905,7 @@ function addTrees() {
     metalness: 0.02,
   });
 
-  for (let i = 0; i < 56; i += 1) {
+  for (let i = 0; i < TREE_COUNT; i += 1) {
     const x = randRange(-70, 70);
     const z = randRange(-70, 70);
 
@@ -2110,7 +2120,7 @@ function createMenuFx() {
   core.castShadow = true;
   group.add(core);
 
-  const particleCount = 280;
+  const particleCount = MENU_PARTICLE_COUNT;
   const particleGeometry = new THREE.BufferGeometry();
   const particlePositions = new Float32Array(particleCount * 3);
   const particlePhase = new Float32Array(particleCount);
@@ -2196,12 +2206,17 @@ function tick() {
 }
 
 function renderFrame() {
-  const aimingBloomBoost = isAimingActive() ? 0.03 : 0;
-  const menuBloomBoost = state.ui.mainMenuOpen ? 0.08 : 0;
-  bloomPass.strength = 0.11 + aimingBloomBoost + menuBloomBoost;
-  bloomPass.radius = state.ui.mainMenuOpen ? 0.6 : 0.48;
-  bloomPass.threshold = state.ui.mainMenuOpen ? 0.74 : 0.84;
-  composer.render();
+  if (USE_POST_PROCESSING && composer && bloomPass) {
+    const aimingBloomBoost = isAimingActive() ? 0.03 : 0;
+    const menuBloomBoost = state.ui.mainMenuOpen ? 0.08 : 0;
+    bloomPass.strength = 0.11 + aimingBloomBoost + menuBloomBoost;
+    bloomPass.radius = state.ui.mainMenuOpen ? 0.6 : 0.48;
+    bloomPass.threshold = state.ui.mainMenuOpen ? 0.74 : 0.84;
+    composer.render();
+    return;
+  }
+
+  renderer.render(scene, camera);
 }
 
 function updateAtmosphere(delta, elapsed) {
@@ -3833,14 +3848,20 @@ function randRange(min, max) {
 }
 
 function onResize() {
-  const pixelRatio = Math.min(window.devicePixelRatio, 2);
+  const pixelRatio = Math.min(window.devicePixelRatio, MAX_RENDER_PIXEL_RATIO);
   renderer.setPixelRatio(pixelRatio);
-  composer.setPixelRatio(pixelRatio);
+  if (composer) {
+    composer.setPixelRatio(pixelRatio);
+  }
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setSize(window.innerWidth, window.innerHeight);
-  bloomPass.setSize(window.innerWidth, window.innerHeight);
+  if (composer) {
+    composer.setSize(window.innerWidth, window.innerHeight);
+  }
+  if (bloomPass) {
+    bloomPass.setSize(window.innerWidth, window.innerHeight);
+  }
 
   if (mobileControlState.enabled) {
     resetMobileStick();
