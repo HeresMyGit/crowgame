@@ -3,833 +3,1313 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>mfer arcade</title>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y13VR5RYEP"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-Y13VR5RYEP');
-  </script>
+  <title>crowgame</title>
   <style>
-    @font-face {
-      font-family: 'SartoshiScript';
-      src: url('/fonts/SartoshiScript-Regular.otf') format('opentype');
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; background: #0a0f14; font-family: monospace; color: #fff; }
-    canvas { display: block; }
-
-    body.menu-mode #score,
-    body.menu-mode #ui,
-    body.menu-mode #hud,
-    body.menu-mode #controls,
-    body.menu-mode .corner-btn,
-    body.menu-mode #cam-hint,
-    body.menu-mode #impact-captures {
-      display: none !important;
-    }
-
-    body.horde-mode #score,
-    body.horde-mode #ui,
-    body.horde-mode #hud,
-    body.horde-mode #controls,
-    body.horde-mode #toggle-controls,
-    body.horde-mode #follow-toggle,
-    body.horde-mode #cam-toggle,
-    body.horde-mode #cam-hint,
-    body.horde-mode #impact-captures {
-      display: none !important;
-    }
-    body.horde-mode #menu-btn {
-      right: 12px;
-    }
-    #horde-settings-btn {
-      display: none;
-      right: 72px;
-    }
-    body.horde-mode #horde-settings-btn {
-      display: block;
-    }
-    #horde-settings-panel {
-      display: none;
-      position: absolute;
-      top: 44px;
-      right: 72px;
-      z-index: 22;
-      width: min(230px, 70vw);
-      padding: 10px 11px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.15);
-      background: rgba(8, 18, 25, 0.86);
-      backdrop-filter: blur(8px);
-      box-shadow: 0 10px 28px rgba(0,0,0,0.32);
-    }
-    #horde-settings-panel.is-open {
-      display: block;
-    }
-    #horde-settings-title {
-      font-size: 11px;
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.74);
-      margin-bottom: 8px;
-    }
-    #horde-settings-panel label {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: 12px;
-      color: #fff;
-      cursor: pointer;
-    }
-    #horde-settings-panel input[type='checkbox'] {
-      accent-color: #4ecdc4;
-      cursor: pointer;
-    }
-    #horde-weapon-debug-panel {
-      margin-top: 8px;
-      display: none;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
-    }
-    #horde-weapon-debug-panel.is-open {
-      display: grid;
-    }
-    .horde-weapon-btn {
-      background: rgba(255,255,255,0.08);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.16);
-      border-radius: 6px;
-      padding: 6px 8px;
-      font-family: monospace;
-      font-size: 10px;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: background 120ms ease, border-color 120ms ease;
-    }
-    .horde-weapon-btn:active {
-      background: rgba(255,255,255,0.2);
-    }
-    .horde-weapon-btn.is-active {
-      background: rgba(78, 205, 196, 0.28);
-      border-color: rgba(78, 205, 196, 0.78);
-      color: #e8fffd;
-    }
-
-    #horde-hud {
-      position: absolute;
-      top: 14px;
-      left: 14px;
-      z-index: 21;
-      display: none;
-      flex-direction: column;
-      gap: 4px;
-      pointer-events: none;
-      text-shadow: 0 2px 10px rgba(0,0,0,0.65);
-    }
-    #horde-score {
-      font-family: 'SartoshiScript', monospace;
-      font-size: 34px;
-      line-height: 0.9;
-      color: #4ecdc4;
-    }
-    #horde-time {
-      font-family: monospace;
-      font-size: 14px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      color: #fff2db;
-      opacity: 0.9;
-    }
-    body.horde-mode #horde-hud {
-      display: flex;
-    }
-    #horde-camera-debug {
-      position: absolute;
-      top: 52px;
-      right: 12px;
-      z-index: 21;
-      display: none;
-      width: min(230px, 62vw);
-      padding: 10px;
-      border-radius: 10px;
-      background: rgba(7, 16, 22, 0.76);
-      border: 1px solid rgba(255,255,255,0.14);
-      backdrop-filter: blur(6px);
-      box-shadow: 0 8px 30px rgba(0,0,0,0.35);
-    }
-    #horde-camera-debug-head {
-      font-size: 11px;
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.72);
-      margin-bottom: 8px;
-    }
-    #horde-camera-list {
-      display: grid;
-      gap: 6px;
-      margin-bottom: 8px;
-    }
-    .horde-cam-btn {
-      width: 100%;
-      text-align: left;
-      padding: 6px 9px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.16);
-      background: rgba(255,255,255,0.07);
-      color: #fff;
-      font-size: 12px;
-      font-family: monospace;
-      cursor: pointer;
-    }
-    .horde-cam-btn:active {
-      filter: brightness(1.15);
-    }
-    .horde-cam-btn.is-active {
-      border-color: #4ecdc4;
-      background: rgba(78, 205, 196, 0.2);
-      color: #d5fff9;
-    }
-    #horde-camera-help {
-      margin: 2px 0 8px;
-      font-size: 10px;
-      letter-spacing: 0.9px;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.68);
-      line-height: 1.45;
-    }
-    #horde-camera-readout {
+    * {
+      box-sizing: border-box;
       margin: 0;
-      padding: 8px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.14);
-      background: rgba(0,0,0,0.25);
-      color: #d9f5ef;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 11px;
-      line-height: 1.35;
-      white-space: pre-wrap;
-      user-select: text;
+      padding: 0;
     }
 
-    #horde-gameover {
+    :root {
+      --hud-bg: rgba(8, 18, 22, 0.72);
+      --hud-border: rgba(255, 255, 255, 0.2);
+      --text: #eef7f0;
+      --accent: #f7d577;
+      --good: #8fe08d;
+      --warn: #ffb57c;
+      --menu-ink: #eef4ff;
+      --menu-panel: rgba(7, 16, 28, 0.82);
+      --menu-accent-a: #5ce1ff;
+      --menu-accent-b: #ffd86e;
+      --menu-accent-c: #ff7e65;
+    }
+
+    body {
+      overflow: hidden;
+      background: #87c7f0;
+      color: var(--text);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+
+    canvas {
+      display: block;
+      touch-action: none;
+    }
+
+    .panel {
       position: absolute;
-      inset: 0;
-      z-index: 22;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: rgba(6, 13, 20, 0.58);
-      backdrop-filter: blur(4px);
-      pointer-events: none;
+      border: 1px solid var(--hud-border);
+      background: var(--hud-bg);
+      border-radius: 10px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.25);
     }
-    #horde-gameover.is-visible {
-      display: flex;
-      pointer-events: auto;
-    }
-    #horde-gameover-card {
-      min-width: min(92vw, 320px);
-      padding: 22px 20px 18px;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.15);
-      background: linear-gradient(180deg, rgba(15, 30, 40, 0.92), rgba(12, 22, 30, 0.95));
-      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-      text-align: center;
-      color: #fff;
-    }
-    #horde-gameover-title {
-      font-family: 'SartoshiScript', monospace;
-      font-size: 42px;
-      line-height: 0.9;
-      color: #fff4df;
-      margin-bottom: 12px;
-    }
-    #horde-final {
-      font-family: monospace;
-      font-size: 13px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      margin-bottom: 14px;
-      color: #fff2db;
-    }
-    #horde-retry-btn {
-      background: #4ecdc4;
-      color: #082027;
-      font-family: 'SartoshiScript', monospace;
-      font-size: 24px;
-      letter-spacing: 0.5px;
-      padding: 8px 26px;
+
+    .is-hidden {
+      display: none !important;
     }
 
     #main-menu {
-      position: fixed;
-      inset: 0;
-      z-index: 30;
-      display: flex;
-      align-items: stretch;
-      justify-content: center;
-      padding: clamp(18px, 3vw, 32px);
-      overflow-y: auto;
-      overflow-x: hidden;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 220ms ease;
-    }
-    body.menu-mode.menu-ready #main-menu {
-      opacity: 1;
-      pointer-events: auto;
-    }
-    #main-menu::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      background:
-        radial-gradient(circle at 18% 18%, rgba(255, 168, 76, 0.14), transparent 38%),
-        radial-gradient(circle at 76% 14%, rgba(78, 205, 196, 0.12), transparent 36%),
-        linear-gradient(180deg, rgba(8, 16, 24, 0.08), rgba(8, 16, 24, 0.24) 62%, rgba(8, 16, 24, 0.42));
-    }
-    #main-menu::after {
-      content: '';
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      background-image:
-        linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
-      background-size: 42px 42px;
-      opacity: 0.12;
-      mask-image: linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.95));
-    }
-    #menu-content {
-      position: relative;
-      z-index: 1;
-      width: min(1280px, 100%);
-      min-height: fit-content;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      gap: 18px;
-      padding: clamp(4px, 1vw, 18px) 0;
-    }
-    #menu-header {
-      max-width: 560px;
-      padding-top: clamp(4px, 1vw, 12px);
-    }
-    #menu-kicker {
-      display: inline-flex;
-      width: fit-content;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 13px;
-      border-radius: 999px;
-      background: rgba(15, 28, 39, 0.18);
-      border: 1px solid rgba(255,255,255,0.12);
-      color: #c5d6db;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 2.2px;
-      backdrop-filter: blur(12px);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
-    }
-    #menu-kicker::before {
-      content: '';
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #4ecdc4;
-      box-shadow: 0 0 18px rgba(78, 205, 196, 0.9);
-    }
-    #menu-title {
-      margin-top: 18px;
-      max-width: 8ch;
-      font-family: 'SartoshiScript', monospace;
-      font-size: clamp(56px, 11vw, 118px);
-      line-height: 0.88;
-      color: #fff7e8;
-      text-shadow: 0 16px 38px rgba(0,0,0,0.32);
-    }
-    #menu-copy {
-      margin-top: 12px;
-      max-width: 20rem;
-      font-size: clamp(15px, 1.8vw, 18px);
-      line-height: 1.5;
-      color: rgba(255,255,255,0.82);
-      text-shadow: 0 4px 12px rgba(0,0,0,0.34);
-    }
-    #menu-games-shell {
-      align-self: flex-end;
-      width: min(460px, 100%);
-      position: relative;
-      overflow: hidden;
-      border-radius: 28px;
-      border: 1px solid rgba(255,255,255,0.14);
-      background: linear-gradient(180deg, rgba(17, 29, 39, 0.36), rgba(12, 20, 28, 0.56));
-      backdrop-filter: blur(18px);
-      box-shadow: 0 28px 80px rgba(0,0,0,0.34);
-    }
-    #menu-games-shell::before {
-      content: '';
       position: absolute;
       inset: 0;
-      pointer-events: none;
-      background:
-        radial-gradient(circle at top right, rgba(255, 166, 77, 0.18), transparent 34%),
-        linear-gradient(135deg, rgba(78, 205, 196, 0.12), transparent 38%);
+      display: none;
+      align-items: center;
+      justify-content: flex-start;
+      z-index: 55;
+      overflow: hidden;
+      color: var(--menu-ink);
+      isolation: isolate;
+      padding: clamp(12px, 3vw, 34px);
     }
-    #menu-games {
+
+    #main-menu.is-visible {
+      display: flex;
+    }
+
+    .menu-layout {
       position: relative;
-      z-index: 1;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    #menu-games-head {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 12px;
-      color: rgba(255,255,255,0.68);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 1.8px;
-    }
-    #menu-game-grid {
+      width: min(1220px, calc(100vw - 24px));
+      min-height: min(88vh, 740px);
       display: grid;
-      gap: 14px;
+      grid-template-columns: minmax(320px, 560px) minmax(320px, 1fr);
+      align-items: center;
+      gap: clamp(18px, 4vw, 76px);
+      margin-inline: auto;
     }
-    .game-card {
-      position: relative;
-      overflow: hidden;
-      width: 100%;
-      padding: 24px 24px 22px;
-      border-radius: 22px;
-      border: 1px solid rgba(255,255,255,0.12);
+
+    #main-menu::before {
+      content: "";
+      position: absolute;
+      inset: -8%;
       background:
-        linear-gradient(135deg, rgba(255, 145, 77, 0.16), rgba(78, 205, 196, 0.14)),
-        rgba(20, 32, 41, 0.82);
-      color: #fff;
-      text-align: left;
-      cursor: pointer;
-      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+        radial-gradient(circle at 78% 20%, rgba(255, 227, 166, 0.3), transparent 22%),
+        radial-gradient(circle at 18% 18%, rgba(160, 209, 255, 0.2), transparent 26%),
+        radial-gradient(circle at 50% 84%, rgba(243, 137, 96, 0.2), transparent 45%),
+        linear-gradient(180deg, #2d4265 0%, #22354f 26%, #19283d 52%, #111b2d 74%, #0b1220 100%);
+      animation: skyShift 11s ease-in-out infinite alternate;
+      z-index: -4;
     }
-    .game-card::before {
-      content: '';
+
+    #main-menu::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(circle at 12% 22%, rgba(255, 255, 255, 0.5) 0 1px, transparent 2px),
+        radial-gradient(circle at 28% 16%, rgba(255, 255, 255, 0.4) 0 1px, transparent 2px),
+        radial-gradient(circle at 46% 12%, rgba(255, 255, 255, 0.38) 0 1px, transparent 2px),
+        radial-gradient(circle at 63% 19%, rgba(255, 255, 255, 0.48) 0 1px, transparent 2px),
+        radial-gradient(circle at 81% 14%, rgba(255, 255, 255, 0.36) 0 1px, transparent 2px);
+      opacity: 0.28;
+      z-index: -3;
+      pointer-events: none;
+    }
+
+    .menu-moon {
+      position: absolute;
+      right: 10%;
+      top: 10%;
+      width: clamp(90px, 14vw, 176px);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 34% 32%, rgba(255, 255, 255, 0.97), rgba(255, 230, 180, 0.9) 44%, rgba(248, 193, 122, 0.62) 68%, rgba(248, 193, 122, 0) 74%);
+      filter: drop-shadow(0 0 34px rgba(255, 210, 133, 0.35));
+      pointer-events: none;
+      z-index: -2;
+    }
+
+    .menu-city {
+      position: absolute;
+      left: -2%;
+      right: -2%;
+      bottom: 0;
+      pointer-events: none;
+    }
+
+    .menu-city.back {
+      height: 34vh;
+      z-index: -2;
+      opacity: 0.8;
+      background:
+        linear-gradient(to top, rgba(19, 31, 49, 0.92), rgba(19, 31, 49, 0.15)),
+        repeating-linear-gradient(
+          90deg,
+          transparent 0 22px,
+          rgba(255, 224, 156, 0.1) 22px 24px,
+          transparent 24px 56px
+        );
+      clip-path: polygon(
+        0% 100%, 0% 42%, 6% 44%, 8% 30%, 13% 30%, 14% 40%, 19% 41%, 21% 22%, 26% 22%, 27% 39%,
+        34% 39%, 35% 27%, 40% 28%, 42% 43%, 49% 43%, 50% 33%, 56% 33%, 57% 47%, 63% 46%, 65% 31%,
+        70% 31%, 72% 45%, 79% 45%, 81% 26%, 86% 27%, 88% 42%, 94% 43%, 96% 36%, 100% 36%, 100% 100%
+      );
+    }
+
+    .menu-city.front {
+      height: 24vh;
+      z-index: -1;
+      background:
+        linear-gradient(to top, rgba(7, 12, 20, 0.96), rgba(7, 12, 20, 0.26)),
+        repeating-linear-gradient(
+          90deg,
+          transparent 0 20px,
+          rgba(255, 222, 142, 0.14) 20px 22px,
+          transparent 22px 42px
+        );
+      clip-path: polygon(
+        0% 100%, 0% 48%, 7% 48%, 8% 31%, 11% 31%, 12% 47%, 20% 47%, 21% 36%, 26% 36%, 27% 49%,
+        36% 49%, 37% 30%, 41% 30%, 42% 43%, 49% 43%, 50% 24%, 54% 24%, 56% 47%, 63% 47%, 64% 34%,
+        70% 35%, 71% 49%, 78% 49%, 79% 29%, 84% 30%, 85% 44%, 92% 44%, 93% 38%, 100% 38%, 100% 100%
+      );
+    }
+
+    .menu-fog {
+      position: absolute;
+      left: -8%;
+      right: -8%;
+      bottom: 8vh;
+      height: 18vh;
+      z-index: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, rgba(162, 190, 220, 0.2), rgba(162, 190, 220, 0) 70%);
+      animation: fogDrift 12s ease-in-out infinite alternate;
+    }
+
+    .menu-crow-flock {
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background:
-        radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 28%),
-        linear-gradient(180deg, rgba(255,255,255,0.02), transparent 40%);
-    }
-    .game-card:hover,
-    .game-card:focus-visible {
-      transform: translateY(-4px) scale(1.01);
-      border-color: rgba(255,255,255,0.28);
-      box-shadow: 0 22px 50px rgba(0,0,0,0.28);
-      outline: none;
-    }
-    .game-card:active {
-      transform: translateY(0);
-      filter: brightness(1.06);
-    }
-    .game-card-top {
-      position: relative;
       z-index: 1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: 11px;
-      letter-spacing: 1.7px;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.72);
-    }
-    .game-card-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: bold;
-    }
-    .game-card-status::before {
-      content: '';
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #ffb34d;
-      box-shadow: 0 0 16px rgba(255, 179, 77, 0.8);
-    }
-    .game-card-title {
-      position: relative;
-      z-index: 1;
-      margin-top: 20px;
-      display: block;
-      font-family: 'SartoshiScript', monospace;
-      font-size: clamp(38px, 5vw, 56px);
-      line-height: 0.94;
-      color: #fff6e7;
-    }
-    .game-card-subtitle {
-      position: relative;
-      z-index: 1;
-      margin-top: 10px;
-      display: block;
-      color: #4ecdc4;
-      font-size: 14px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-    .game-card-description {
-      position: relative;
-      z-index: 1;
-      margin-top: 16px;
-      display: block;
-      color: rgba(255,255,255,0.82);
-      font-size: 14px;
-      line-height: 1.55;
-      max-width: 30ch;
-    }
-    .game-card-cta {
-      position: relative;
-      z-index: 1;
-      margin-top: 22px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 12px 17px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.08);
-      font-size: 12px;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      font-weight: bold;
-    }
-    .game-card-cta::after {
-      content: '>';
-      font-size: 14px;
     }
 
-    /* Top overlay — title, instructions, score */
-    #ui {
+    .menu-crow {
       position: absolute;
-      top: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #fff;
-      text-align: center;
+      width: 26px;
+      height: 12px;
+      opacity: 0.55;
+      animation: crowGlide 13s linear infinite;
+    }
+
+    .menu-crow::before,
+    .menu-crow::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      width: 13px;
+      height: 9px;
+      border: 2px solid rgba(11, 16, 23, 0.8);
+      border-color: rgba(11, 16, 23, 0.82) transparent transparent transparent;
+      border-radius: 60% 60% 0 0;
+    }
+
+    .menu-crow::before {
+      left: 0;
+      transform: rotate(-18deg);
+    }
+
+    .menu-crow::after {
+      right: 0;
+      transform: scaleX(-1) rotate(-18deg);
+    }
+
+    .menu-crow.c1 {
+      top: 21%;
+      left: 12%;
+      transform: scale(0.85);
+      animation-delay: -4s;
+    }
+
+    .menu-crow.c2 {
+      top: 27%;
+      left: 34%;
+      transform: scale(0.72);
+      animation-delay: -7s;
+    }
+
+    .menu-crow.c3 {
+      top: 18%;
+      left: 58%;
+      transform: scale(1);
+      animation-delay: -1.4s;
+    }
+
+    .menu-crow.c4 {
+      top: 31%;
+      left: 78%;
+      transform: scale(0.64);
+      animation-delay: -9s;
+    }
+
+    .menu-card {
+      position: relative;
+      z-index: 3;
+      width: min(560px, 100%);
+      border-radius: 20px;
+      border: 1px solid rgba(214, 187, 126, 0.36);
+      background:
+        linear-gradient(170deg, rgba(22, 31, 40, 0.93), rgba(8, 12, 18, 0.95)),
+        var(--menu-panel);
+      box-shadow:
+        0 26px 80px rgba(0, 0, 0, 0.55),
+        0 0 0 1px rgba(255, 250, 236, 0.08) inset,
+        0 0 64px rgba(197, 169, 120, 0.14);
+      backdrop-filter: blur(7px);
+      padding: clamp(22px, 4.3vw, 42px);
+      overflow: hidden;
+    }
+
+    .menu-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(120deg, transparent 12%, rgba(255, 255, 255, 0.08) 30%, transparent 46%),
+        linear-gradient(transparent 87%, rgba(255, 255, 255, 0.08) 88%, transparent 92%);
+      mix-blend-mode: screen;
       pointer-events: none;
-      z-index: 10;
     }
-    #instructions { font-size: 14px; opacity: 0.8; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
-    #score {
-      position: absolute; top: 12px; left: 12px;
-      color: #e94560; font-family: 'SartoshiScript', monospace; font-size: 36px; font-weight: bold;
-      white-space: nowrap; pointer-events: none; z-index: 10;
-      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+
+    .menu-card::after {
+      content: "";
+      position: absolute;
+      right: -1px;
+      top: 24px;
+      width: 0;
+      height: 0;
+      border-top: 11px solid transparent;
+      border-bottom: 11px solid transparent;
+      border-left: 15px solid rgba(214, 187, 126, 0.85);
+      filter: drop-shadow(0 0 8px rgba(214, 187, 126, 0.25));
     }
-    #loading {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, 30%);
-      color: #fff; font-size: 20px; font-family: 'SartoshiScript', monospace; z-index: 20;
+
+    .menu-kicker {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+      color: #081220;
+      background: linear-gradient(90deg, #f4d996, #d9bc7f);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    #menu-title {
+      font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+      font-size: clamp(48px, 9.5vw, 96px);
+      text-transform: uppercase;
+      line-height: 0.9;
+      letter-spacing: 0.015em;
+      color: #f5f9ff;
+      text-shadow:
+        0 2px 0 rgba(0, 0, 0, 0.36),
+        0 12px 38px rgba(199, 176, 122, 0.18),
+        0 8px 30px rgba(255, 204, 120, 0.12);
+      margin-bottom: 12px;
+    }
+
+    .menu-subtitle {
+      max-width: 65ch;
+      font-size: clamp(14px, 2vw, 17px);
+      line-height: 1.45;
+      color: #d3ddeb;
+    }
+
+    .menu-tag-row {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .menu-tag {
+      border: 1px solid rgba(197, 176, 133, 0.34);
+      background: rgba(22, 28, 36, 0.82);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #d6c4a1;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .menu-actions {
+      margin-top: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .menu-btn {
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      border-radius: 12px;
+      padding: 11px 16px;
+      font-weight: 700;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #09121f;
+      cursor: pointer;
+      transition: transform 0.14s ease, filter 0.14s ease;
+    }
+
+    .menu-btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.08);
+    }
+
+    .menu-btn:active {
+      transform: translateY(0);
+    }
+
+    .menu-btn.primary {
+      background: linear-gradient(180deg, #ffe380, #e6b95c);
+      box-shadow: 0 10px 24px rgba(255, 222, 123, 0.22);
+    }
+
+    .menu-btn.secondary {
+      color: #ddeeff;
+      background: linear-gradient(180deg, #4f5e70, #374353);
+      box-shadow: 0 10px 24px rgba(100, 129, 162, 0.21);
+    }
+
+    #menu-hint {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #f7d07b;
+      min-height: 1.2em;
+    }
+
+    .menu-control-note {
+      margin-top: 12px;
+      font-size: 12px;
+      color: rgba(224, 212, 188, 0.88);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .menu-tree-scene {
+      position: relative;
+      width: min(640px, 100%);
+      min-height: min(76vh, 640px);
+      justify-self: end;
+      align-self: end;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .menu-tree-ground {
+      position: absolute;
+      right: 6%;
+      bottom: 7vh;
+      width: min(520px, 90%);
+      height: 90px;
+      background: radial-gradient(ellipse at center, rgba(10, 16, 23, 0.8), rgba(10, 16, 23, 0) 72%);
+      filter: blur(2px);
+    }
+
+    .menu-tree-trunk {
+      position: absolute;
+      right: 30%;
+      bottom: 11vh;
+      width: 70px;
+      height: min(52vh, 420px);
+      border-radius: 40px 40px 16px 16px;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          rgba(62, 43, 28, 0.9) 0 9px,
+          rgba(85, 57, 35, 0.92) 9px 18px
+        );
+      box-shadow: inset -8px 0 12px rgba(0, 0, 0, 0.26);
+      z-index: 3;
+    }
+
+    .menu-tree-branch {
+      position: absolute;
+      right: 30%;
+      height: 16px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #6e4d31, #533924);
+      transform-origin: right center;
+      animation: branchSway 8s ease-in-out infinite;
+      z-index: 3;
+    }
+
+    .menu-tree-branch.b1 {
+      bottom: 42vh;
+      width: 210px;
+      transform: rotate(-20deg);
+    }
+
+    .menu-tree-branch.b2 {
+      bottom: 34vh;
+      width: 280px;
+      transform: rotate(8deg);
+      animation-delay: -2.2s;
+    }
+
+    .menu-tree-branch.b3 {
+      bottom: 27vh;
+      width: 180px;
+      transform: rotate(-14deg);
+      animation-delay: -5s;
+    }
+
+    .menu-tree-canopy {
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 34%, rgba(89, 125, 88, 0.95), rgba(45, 74, 52, 0.96) 72%);
+      box-shadow: inset -16px -10px 22px rgba(11, 24, 16, 0.35);
+      z-index: 2;
+    }
+
+    .menu-tree-canopy.c1 {
+      right: 16%;
+      bottom: 44vh;
+      width: 220px;
+      height: 190px;
+    }
+
+    .menu-tree-canopy.c2 {
+      right: 33%;
+      bottom: 49vh;
+      width: 230px;
+      height: 210px;
+    }
+
+    .menu-tree-canopy.c3 {
+      right: 4%;
+      bottom: 52vh;
+      width: 190px;
+      height: 165px;
+    }
+
+    .menu-tree-crow {
+      position: absolute;
+      right: calc(30% + 176px);
+      bottom: calc(34vh + 28px);
+      width: 74px;
+      height: 38px;
+      border-radius: 60% 60% 42% 42%;
+      background: radial-gradient(circle at 40% 30%, #2a3444, #131921 72%);
+      box-shadow: 0 6px 10px rgba(0, 0, 0, 0.34);
+      transform-origin: center bottom;
+      animation: perchBob 3.4s ease-in-out infinite;
+      z-index: 4;
+    }
+
+    .menu-tree-crow::before {
+      content: "";
+      position: absolute;
+      right: -14px;
+      top: 13px;
+      width: 0;
+      height: 0;
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-left: 15px solid #d5a25b;
+    }
+
+    .menu-tree-crow::after {
+      content: "";
+      position: absolute;
+      left: 10px;
+      top: -10px;
+      width: 28px;
+      height: 24px;
+      border-radius: 55% 55% 45% 45%;
+      background: radial-gradient(circle at 38% 24%, #364356, #1a222c 70%);
+    }
+
+    @keyframes skyShift {
+      0% {
+        filter: saturate(1) brightness(1);
+      }
+      100% {
+        filter: saturate(1.06) brightness(1.04);
+      }
+    }
+
+    @keyframes fogDrift {
+      0% {
+        transform: translateX(-2%) scaleX(1);
+        opacity: 0.35;
+      }
+      100% {
+        transform: translateX(2%) scaleX(1.08);
+        opacity: 0.18;
+      }
+    }
+
+    @keyframes crowGlide {
+      0%, 100% {
+        translate: 0 0;
+      }
+      25% {
+        translate: 20px -12px;
+      }
+      55% {
+        translate: -8px 6px;
+      }
+      75% {
+        translate: 14px -8px;
+      }
+    }
+
+    @keyframes branchSway {
+      0%, 100% {
+        rotate: 0deg;
+      }
+      50% {
+        rotate: 3deg;
+      }
+    }
+
+    @keyframes perchBob {
+      0%, 100% {
+        translate: 0 0;
+      }
+      50% {
+        translate: 0 -3px;
+      }
+    }
+
+    #hud {
+      top: 12px;
+      left: 12px;
+      width: min(290px, calc(100vw - 24px));
+      padding: 12px;
+      z-index: 20;
+    }
+
+    #title {
+      font-size: 22px;
+      letter-spacing: 0.02em;
+      color: var(--accent);
+      text-transform: lowercase;
+      margin-bottom: 6px;
+    }
+
+    #quest-status,
+    #worm-status,
+    #speed-status,
+    #inventory-status,
+    #craft-status {
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    #quest-status {
+      color: #fff6d8;
+      margin-bottom: 4px;
+    }
+
+    #worm-status {
+      color: #d5f3d6;
+      margin-bottom: 4px;
+    }
+
+    #speed-status {
+      color: #f7f3cc;
+      margin-bottom: 6px;
+    }
+
+    #quest-log {
+      font-size: 12px;
+      line-height: 1.35;
+      color: #d8ebff;
+      margin-bottom: 6px;
+    }
+
+    #inventory-status {
+      color: #d8ffe1;
+      margin-bottom: 4px;
+    }
+
+    #craft-status {
+      color: #ffe9b8;
+    }
+
+    #prompt {
+      left: 50%;
+      bottom: 30px;
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      z-index: 24;
+      font-size: 14px;
+      color: #fff9e6;
+      display: none;
       text-align: center;
+      max-width: min(500px, calc(100vw - 24px));
     }
 
-    /* Top-right corner buttons */
-    .corner-btn {
-      position: absolute; top: 12px; z-index: 11;
-      background: rgba(0,0,0,0.5); color: #fff;
-      border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
-      padding: 6px 10px; font-family: monospace; font-size: 12px; cursor: pointer;
+    #prompt.visible {
+      display: block;
     }
-    .corner-btn:active { background: rgba(255,255,255,0.15); }
-    .corner-btn.active { background: #e94560; border-color: #e94560; }
-    #menu-btn { right: 292px; }
-    #follow-toggle { right: 196px; }
-    #cam-toggle { right: 100px; }
-    #toggle-controls { right: 12px; }
 
-    /* Settings panel */
-    #controls {
-      position: absolute; top: 44px; right: 12px;
-      background: rgba(0,0,0,0.8); backdrop-filter: blur(6px);
-      padding: 12px 14px; border-radius: 8px;
-      color: #fff; font-size: 12px; z-index: 12;
-      min-width: 200px; max-height: 70vh; overflow-y: auto;
+    #dialogue {
+      left: 50%;
+      top: 14px;
+      transform: translateX(-50%);
+      width: min(560px, calc(100vw - 24px));
+      padding: 10px 12px;
+      z-index: 25;
       display: none;
     }
-    #controls h3 { margin: 0 0 8px; font-size: 12px; opacity: 0.5; text-transform: uppercase; letter-spacing: 1px; }
-    #controls label { display: flex; justify-content: space-between; align-items: center; margin: 5px 0; gap: 8px; }
-    #controls label span { opacity: 0.8; white-space: nowrap; }
-    #controls input[type=range] { flex: 1; min-width: 70px; cursor: pointer; accent-color: #e94560; }
-    #controls .val { min-width: 28px; text-align: right; font-size: 11px; opacity: 0.5; }
-    #defaults-btn {
-      margin-top: 8px; width: 100%; padding: 5px;
-      font-family: monospace; font-size: 11px;
-      background: rgba(255,255,255,0.1); color: #fff;
-      border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; cursor: pointer;
+
+    #dialogue.visible {
+      display: block;
     }
 
-    /* Camera hint tooltip */
-    #cam-hint {
-      display: none; position: absolute; top: 44px; right: 12px;
-      background: rgba(0,0,0,0.85); color: #4ecdc4;
-      padding: 8px 14px; border-radius: 6px;
-      font-family: monospace; font-size: 11px; z-index: 13;
-      pointer-events: none; line-height: 1.6;
+    #dialogue-speaker {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #ffe2a9;
+      margin-bottom: 5px;
     }
 
-    /* Bottom HUD bar */
-    #hud {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
-      z-index: 10; padding: 8px 12px 10px;
-      border-top: 1px solid rgba(255,255,255,0.08);
+    #dialogue-text {
+      font-size: 15px;
+      line-height: 1.35;
+      color: #f4fff3;
     }
-    #level-select {
-      display: flex; gap: 3px; margin-bottom: 8px;
-      overflow-x: auto; -webkit-overflow-scrolling: touch;
-    }
-    .level-btn {
-      background: rgba(255,255,255,0.08); color: #fff;
-      border: 1px solid rgba(255,255,255,0.12); border-radius: 5px;
-      padding: 6px 12px; font-family: monospace; font-size: 12px;
-      cursor: pointer; white-space: nowrap; flex-shrink: 0;
-    }
-    .level-btn.active { background: #e94560; border-color: #e94560; }
-    .level-btn:active:not(.active) { background: rgba(255,255,255,0.15); }
 
-    #action-row {
-      display: flex; align-items: center; justify-content: center; gap: 8px;
+    #controls {
+      right: 12px;
+      bottom: 12px;
+      width: min(300px, calc(100vw - 24px));
+      padding: 10px 12px;
+      z-index: 20;
+      font-size: 13px;
+      line-height: 1.4;
+      color: #e8f4ff;
     }
-    .action-btn {
-      padding: 10px 24px; font-family: monospace; font-size: 15px; font-weight: bold;
-      color: #fff; border: none; border-radius: 6px; cursor: pointer;
-      text-transform: uppercase; letter-spacing: 1px;
-    }
-    .action-btn:active { filter: brightness(1.2); }
-    #go-btn { background: #4ecdc4; display: none; font-family: 'SartoshiScript', monospace; font-size: 22px; }
-    #reset-btn { background: #e94560; display: none; }
-    #clear-btn { background: rgba(255,255,255,0.15); display: none; font-size: 13px; padding: 8px 16px; }
 
-    /* Impact captures — above HUD */
-    #impact-captures {
-      display: none; position: absolute; bottom: 110px; left: 12px; z-index: 15;
+    #shoot-btn {
+      position: absolute;
+      right: 12px;
+      bottom: 178px;
+      z-index: 22;
+      min-width: 124px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #18232a;
+      background: linear-gradient(180deg, #f7d577, #e6b95c);
+      border: 1px solid rgba(0, 0, 0, 0.35);
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
     }
-    #impact-captures > div { display: flex; gap: 6px; }
-    .capture-btn {
-      padding: 10px 16px; border-radius: 6px; cursor: pointer;
-      font-family: monospace; font-size: 12px; font-weight: bold; text-align: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-    }
-    #impact-photo .capture-btn { background: #fff; color: #1a1a2e; }
-    #impact-video-wrap .capture-btn { background: #4ecdc4; color: #1a1a2e; }
 
-    /* Mobile adjustments */
-    @media (max-width: 768px) {
-      #main-menu { padding: 16px; }
-      #menu-content { gap: 26px; }
-      #menu-header { max-width: 360px; }
-      #menu-title { max-width: none; }
-      #menu-games-shell { width: 100%; }
-      #menu-games { padding: 18px; }
-      #instructions { font-size: 12px; }
-      .corner-btn { padding: 8px 10px; font-size: 11px; }
-      #menu-btn { right: 254px; }
-      #follow-toggle { right: 168px; }
-      #cam-toggle { right: 82px; }
-      #toggle-controls { right: 8px; }
-      #controls { top: 40px; right: 8px; }
-      #hud { padding: 6px 8px 8px; }
-      .level-btn { padding: 7px 10px; font-size: 11px; }
-      .action-btn { padding: 10px 18px; font-size: 14px; }
-      #clear-btn { padding: 8px 12px; font-size: 12px; }
-      #impact-captures { bottom: 100px; left: 8px; }
-      #horde-score { font-size: 28px; }
-      #horde-time { font-size: 12px; }
-      #horde-settings-btn { right: 66px; }
-      #horde-settings-panel { top: 40px; right: 66px; width: min(200px, 72vw); }
-      #horde-camera-debug { top: 74px; right: 8px; width: min(200px, 70vw); }
-      #horde-camera-readout { font-size: 10px; }
-      #horde-gameover-title { font-size: 36px; }
+    #shoot-btn:active {
+      transform: translateY(1px);
     }
-    @media (max-width: 400px) {
-      #menu-copy { max-width: 16rem; }
-      #menu-games { padding: 16px; }
-      .game-card { padding: 18px 18px 16px; }
-      .action-btn { padding: 8px 14px; font-size: 13px; }
-      .level-btn { padding: 6px 8px; font-size: 10px; }
+
+    #mobile-controls {
+      position: absolute;
+      inset: 0;
+      z-index: 29;
+      display: none;
+      pointer-events: none;
     }
-    @media (max-height: 860px) {
-      #main-menu {
-        align-items: flex-start;
-        padding-top: 14px;
-        padding-bottom: 14px;
-      }
-      #menu-content {
+
+    #mobile-controls.is-visible {
+      display: block;
+    }
+
+    #mobile-stick-zone {
+      position: absolute;
+      left: max(12px, env(safe-area-inset-left));
+      bottom: calc(max(14px, env(safe-area-inset-bottom)) + 6px);
+      width: 148px;
+      height: 148px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.32);
+      background: radial-gradient(circle at 35% 32%, rgba(223, 245, 255, 0.2), rgba(8, 20, 28, 0.45) 68%);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+      pointer-events: auto;
+      touch-action: none;
+      backdrop-filter: blur(4px);
+    }
+
+    #mobile-stick-knob {
+      --dx: 0px;
+      --dy: 0px;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.42);
+      background: radial-gradient(circle at 34% 30%, rgba(255, 236, 184, 0.9), rgba(221, 175, 102, 0.84) 72%);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.24);
+      transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)));
+      pointer-events: none;
+    }
+
+    #mobile-rise-fall {
+      position: absolute;
+      right: max(12px, env(safe-area-inset-right));
+      bottom: calc(max(18px, env(safe-area-inset-bottom)) + 144px);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    #mobile-actions {
+      position: absolute;
+      right: max(12px, env(safe-area-inset-right));
+      bottom: calc(max(14px, env(safe-area-inset-bottom)) + 6px);
+      width: min(230px, 54vw);
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    #mobile-look-hint {
+      position: absolute;
+      left: 50%;
+      bottom: calc(max(16px, env(safe-area-inset-bottom)) + 188px);
+      transform: translateX(-50%);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      background: rgba(7, 17, 22, 0.52);
+      color: #f6f9ff;
+      font-size: 11px;
+      padding: 4px 10px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    .mobile-btn {
+      min-height: 42px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.36);
+      background: linear-gradient(180deg, rgba(255, 232, 176, 0.9), rgba(223, 177, 100, 0.9));
+      color: #10202a;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.28);
+    }
+
+    .mobile-btn.wide {
+      grid-column: span 2;
+    }
+
+    .mobile-btn.vert {
+      min-width: 84px;
+    }
+
+    .mobile-btn.is-active,
+    .mobile-btn:active {
+      filter: brightness(1.08);
+      transform: translateY(1px);
+    }
+
+    .menu-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+      background: rgba(8, 12, 17, 0.58);
+      backdrop-filter: blur(3px);
+    }
+
+    .menu-overlay.is-visible {
+      display: flex;
+    }
+
+    .mc-window {
+      width: min(760px, calc(100vw - 24px));
+      max-height: calc(100vh - 24px);
+      overflow: auto;
+      border: 3px solid #1d1d1d;
+      background: #c8c8c8;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4);
+      color: #111;
+      font-family: 'Courier New', monospace;
+      padding: 10px;
+    }
+
+    .mc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      border: 2px solid #1f1f1f;
+      background: linear-gradient(90deg, #4d5f8a, #7486b3);
+      color: #f4f8ff;
+      padding: 6px 8px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .mc-close {
+      min-width: 30px;
+      height: 26px;
+      border: 2px solid #101010;
+      background: #cfcfcf;
+      color: #111;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 700;
+    }
+
+    .mc-label {
+      font-size: 13px;
+      margin: 8px 0 6px;
+      color: #202020;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .mc-grid {
+      display: grid;
+      gap: 6px;
+    }
+
+    #inventory-grid {
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+    }
+
+    #hotbar-grid {
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+    }
+
+    .mc-slot {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border: 2px solid #434343;
+      background: linear-gradient(180deg, #8f8f8f, #7c7c7c);
+      color: #f3f3f3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+    }
+
+    .mc-slot.empty {
+      color: rgba(255, 255, 255, 0.2);
+    }
+
+    .mc-slot-name {
+      text-align: center;
+      line-height: 1.05;
+      padding: 0 2px;
+    }
+
+    .mc-slot-count {
+      position: absolute;
+      right: 3px;
+      bottom: 2px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 1px 0 #111;
+    }
+
+    .mc-info {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #1e1e1e;
+      line-height: 1.35;
+    }
+
+    .recipe-list {
+      margin-top: 8px;
+      display: grid;
+      gap: 9px;
+      max-height: 52vh;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .recipe-card {
+      border: 2px solid #272727;
+      background: linear-gradient(180deg, #b8b8b8, #a1a1a1);
+      padding: 8px;
+    }
+
+    .recipe-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .recipe-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #121212;
+    }
+
+    .recipe-owned {
+      font-size: 11px;
+      color: #1d2e18;
+      background: rgba(157, 211, 146, 0.65);
+      border: 1px solid rgba(0, 0, 0, 0.25);
+      padding: 1px 6px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .recipe-ingredients {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 7px;
+    }
+
+    .recipe-chip {
+      border: 1px solid #2d2d2d;
+      background: #d3d3d3;
+      color: #131313;
+      padding: 2px 6px;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .recipe-chip.missing {
+      background: #d4b2b0;
+      color: #3f1513;
+    }
+
+    .recipe-desc {
+      font-size: 11px;
+      color: #212121;
+      margin-bottom: 7px;
+      line-height: 1.35;
+    }
+
+    .recipe-craft-btn {
+      width: 100%;
+      border: 2px solid #222;
+      background: linear-gradient(180deg, #91c77e, #75a866);
+      color: #11210c;
+      font-family: inherit;
+      font-weight: 700;
+      padding: 7px 9px;
+      cursor: pointer;
+    }
+
+    .recipe-craft-btn:disabled {
+      cursor: default;
+      background: linear-gradient(180deg, #9f9f9f, #808080);
+      color: #444;
+    }
+
+    #crafting-note {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #191919;
+      line-height: 1.35;
+    }
+
+    #reticle {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 9px;
+      height: 9px;
+      transform: translate(-50%, -50%);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: 50%;
+      z-index: 19;
+      pointer-events: none;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+    }
+
+    #reticle.aiming {
+      width: 16px;
+      height: 16px;
+      border-color: rgba(255, 231, 163, 0.95);
+      box-shadow: 0 0 10px rgba(255, 195, 92, 0.55);
+    }
+
+    #pointer-lock-note {
+      margin-top: 6px;
+      color: var(--warn);
+    }
+
+    @media (max-width: 700px) {
+      .menu-layout {
+        grid-template-columns: 1fr;
         min-height: auto;
-        justify-content: flex-start;
-        gap: 20px;
+        gap: 12px;
       }
-      #menu-title { margin-top: 12px; }
-      #menu-copy { margin-top: 8px; }
-      #menu-games-shell { align-self: stretch; }
-      #menu-games { padding: 18px; }
-      .game-card { padding: 18px 18px 16px; }
-      .game-card-title { margin-top: 14px; }
-      .game-card-description { margin-top: 12px; }
-      .game-card-cta { margin-top: 14px; }
+
+      .menu-tree-scene {
+        order: 2;
+        justify-self: center;
+        width: min(460px, 100%);
+        min-height: 290px;
+      }
+
+      .menu-tree-ground {
+        bottom: 0;
+      }
+
+      .menu-tree-trunk {
+        right: 34%;
+        bottom: 6vh;
+        width: 54px;
+        height: 190px;
+      }
+
+      .menu-tree-branch.b1 {
+        bottom: 190px;
+        width: 130px;
+      }
+
+      .menu-tree-branch.b2 {
+        bottom: 140px;
+        width: 190px;
+      }
+
+      .menu-tree-branch.b3 {
+        bottom: 105px;
+        width: 120px;
+      }
+
+      .menu-tree-canopy.c1 {
+        bottom: 180px;
+        width: 150px;
+        height: 130px;
+      }
+
+      .menu-tree-canopy.c2 {
+        right: 29%;
+        bottom: 215px;
+        width: 160px;
+        height: 145px;
+      }
+
+      .menu-tree-canopy.c3 {
+        bottom: 226px;
+        width: 132px;
+        height: 114px;
+      }
+
+      .menu-tree-crow {
+        right: calc(34% + 104px);
+        bottom: 166px;
+        width: 58px;
+        height: 30px;
+      }
+
+      .menu-card {
+        order: 1;
+        border-radius: 16px;
+        padding: 18px;
+      }
+
+      #menu-title {
+        font-size: clamp(40px, 15vw, 62px);
+      }
+
+      .menu-actions {
+        gap: 8px;
+      }
+
+      .menu-btn {
+        flex: 1 1 100%;
+      }
+
+      #title {
+        font-size: 20px;
+      }
+
+      #controls {
+        font-size: 12px;
+      }
+
+      #dialogue-text {
+        font-size: 14px;
+      }
+
+      #shoot-btn {
+        bottom: 186px;
+        min-width: 104px;
+        font-size: 12px;
+        padding: 8px 10px;
+      }
+
+      #mobile-stick-zone {
+        width: 132px;
+        height: 132px;
+      }
+
+      #mobile-stick-knob {
+        width: 54px;
+        height: 54px;
+      }
+
+      #mobile-actions {
+        width: min(214px, 58vw);
+        gap: 7px;
+      }
+
+      .mobile-btn {
+        min-height: 39px;
+        font-size: 11px;
+      }
+
+      .mc-window {
+        width: calc(100vw - 18px);
+        padding: 8px;
+      }
+
+      #inventory-grid,
+      #hotbar-grid {
+        gap: 4px;
+      }
     }
   </style>
 </head>
-<body class="menu-mode">
-  <div id="main-menu" aria-label="Game selection">
-    <div id="menu-content">
-      <header id="menu-header">
-        <div id="menu-kicker">mfer arcade</div>
-        <div id="menu-title">choose a game</div>
-        <div id="menu-copy">Two cabinets live. More on deck.</div>
-      </header>
-      <section id="menu-games-shell">
-        <div id="menu-games">
-          <div id="menu-games-head">
-            <span>games</span>
-            <span>local build</span>
-          </div>
-          <div id="menu-game-grid"></div>
+<body>
+  <div id="main-menu" class="is-visible">
+    <div class="menu-moon"></div>
+    <div class="menu-city back"></div>
+    <div class="menu-city front"></div>
+    <div class="menu-fog"></div>
+    <div class="menu-crow-flock">
+      <span class="menu-crow c1"></span>
+      <span class="menu-crow c2"></span>
+      <span class="menu-crow c3"></span>
+      <span class="menu-crow c4"></span>
+    </div>
+    <div class="menu-layout">
+      <div class="menu-card">
+        <div class="menu-kicker">The Roost Ledger</div>
+        <h1 id="menu-title">Crowgame</h1>
+        <p class="menu-subtitle">
+          Dawn patrol briefing: launch from your rooftop nest, hunt worms, complete city quests, and craft your first slingshot.
+        </p>
+        <div class="menu-tag-row">
+          <span class="menu-tag">Nest Objectives</span>
+          <span class="menu-tag">Scavenge + Craft</span>
+          <span class="menu-tag">Aerial Streets</span>
+          <span class="menu-tag">Border Patrols</span>
         </div>
-      </section>
-    </div>
-  </div>
+        <div class="menu-actions">
+          <button id="start-game-btn" class="menu-btn primary" type="button">Start Game</button>
+          <button id="menu-audio-btn" class="menu-btn secondary" type="button">Enable Audio</button>
+        </div>
+        <div id="menu-hint">Press Enable Audio for music, then Start Game.</div>
+        <div class="menu-control-note">Desktop: WASD + Mouse • iOS: left stick + touch buttons</div>
+      </div>
 
-  <div id="score"></div>
-  <div id="ui">
-    <div id="instructions">click to place, shift+drag to set height</div>
-  </div>
-  <div id="horde-hud" aria-live="polite">
-    <div id="horde-score">kills: 0</div>
-    <div id="horde-time">time: 0.0s</div>
-  </div>
-  <div id="horde-camera-debug" aria-label="horde camera debug">
-    <div id="horde-camera-debug-head">camera debug</div>
-    <div id="horde-camera-list">
-      <button class="horde-cam-btn" data-horde-cam="current" type="button">arena wide (legacy)</button>
-      <button class="horde-cam-btn" data-horde-cam="diablo" type="button">isometric (diablo)</button>
-      <button class="horde-cam-btn" data-horde-cam="topdown" type="button">top-down tactical</button>
-      <button class="horde-cam-btn is-active" data-horde-cam="shoulder" type="button">over shoulder (default)</button>
-      <button class="horde-cam-btn" data-horde-cam="sideline" type="button">sideline broadcast</button>
-    </div>
-    <div id="horde-camera-help">WASD move · Q/E or ←/→ yaw · ↑/↓ pitch · Z/X up/down</div>
-    <pre id="horde-camera-readout">camera: loading...</pre>
-  </div>
-  <div id="horde-gameover" aria-live="assertive">
-    <div id="horde-gameover-card">
-      <div id="horde-gameover-title">game over</div>
-      <div id="horde-final"></div>
-      <button id="horde-retry-btn" class="action-btn" type="button">retry</button>
-    </div>
-  </div>
-
-  <div id="loading">loading mfer...</div>
-
-  <!-- Top-right corner -->
-  <button id="menu-btn" class="corner-btn">menu</button>
-  <button id="horde-settings-btn" class="corner-btn" type="button">settings</button>
-  <button id="follow-toggle" class="corner-btn active">follow: on</button>
-  <button id="cam-toggle" class="corner-btn">cam: near</button>
-  <button id="toggle-controls" class="corner-btn">settings</button>
-  <div id="horde-settings-panel" aria-label="horde settings">
-    <div id="horde-settings-title">horde settings</div>
-    <label for="horde-debug-toggle">
-      <span>debug mode</span>
-      <input id="horde-debug-toggle" type="checkbox" checked>
-    </label>
-    <label for="horde-weapon-debug-toggle" style="margin-top:8px;">
-      <span>weapon debug</span>
-      <input id="horde-weapon-debug-toggle" type="checkbox">
-    </label>
-    <div id="horde-weapon-debug-panel" aria-label="weapon debug choices">
-      <button class="horde-weapon-btn is-active" data-horde-weapon="sidearm" type="button">pistol</button>
-      <button class="horde-weapon-btn" data-horde-weapon="machine_gun" type="button">machine</button>
-      <button class="horde-weapon-btn" data-horde-weapon="shotgun" type="button">shotgun</button>
-      <button class="horde-weapon-btn" data-horde-weapon="tri_shot" type="button">tri-shot</button>
-      <button class="horde-weapon-btn" data-horde-weapon="grenade_lob" type="button">grenade</button>
-      <button class="horde-weapon-btn" data-horde-weapon="sniper_rifle" type="button">sniper</button>
-    </div>
-  </div>
-  <div id="cam-hint">WASD/arrows move, Q/E rotate, Z/X up/down<br>right-click drag to orbit, scroll to zoom</div>
-
-  <!-- Settings panel -->
-  <div id="controls">
-    <h3>physics</h3>
-    <label><span>gravity</span><input type="range" id="sl-gravity" min="1" max="50" value="15" step="1"><span class="val" id="v-gravity">15</span></label>
-    <label><span>launch</span><input type="range" id="sl-launch" min="0" max="10" value="2" step="0.5"><span class="val" id="v-launch">2</span></label>
-    <label><span>spin</span><input type="range" id="sl-spin" min="0" max="15" value="6" step="0.5"><span class="val" id="v-spin">6</span></label>
-    <label><span>bounce</span><input type="range" id="sl-bounce" min="0" max="1" value="0.3" step="0.05"><span class="val" id="v-bounce">0.3</span></label>
-    <label><span>damping</span><input type="range" id="sl-damping" min="0" max="4" value="2" step="0.1"><span class="val" id="v-damping">2</span></label>
-    <label><span>height</span><input type="range" id="sl-height" min="3" max="20" value="7" step="1"><span class="val" id="v-height">7</span></label>
-    <label><span>speed</span><input type="range" id="sl-timescale" min="10" max="200" value="100" step="10"><span class="val" id="v-timescale">100%</span></label>
-    <label data-level="1"><span>stairs</span><input type="range" id="sl-stairs" min="10" max="50" value="30" step="1"><span class="val" id="v-stairs">30</span></label>
-    <label data-level="3"><span>pachinko</span><input type="range" id="sl-pachinko" min="1" max="10" value="5" step="1"><span class="val" id="v-pachinko">5</span></label>
-    <button id="defaults-btn">defaults</button>
-    <h3 style="margin-top:10px;">mfer</h3>
-    <div style="display:flex;gap:4px;align-items:center;">
-      <button id="mfer-mode-btn" style="flex-shrink:0;padding:4px 8px;font-family:monospace;font-size:11px;background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;cursor:pointer;">random</button>
-      <input id="mfer-id-input" type="number" min="0" max="10020" placeholder="mfer #" style="display:none;width:70px;padding:4px;font-family:monospace;font-size:11px;background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
-    </div>
-  </div>
-
-  <!-- Impact captures -->
-  <div id="impact-captures">
-    <div>
-      <div id="impact-photo" style="cursor:pointer;"><div class="capture-btn">save photo</div></div>
-      <div id="impact-video-wrap" style="cursor:pointer;display:none;"><div class="capture-btn">save gif</div></div>
-      <div id="impact-full-video" style="cursor:pointer;display:none;"><div class="capture-btn" style="background:#ff8844;">save video</div></div>
-    </div>
-  </div>
-
-  <!-- Save/Share modal -->
-  <div id="save-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);z-index:100;display:none;align-items:center;justify-content:center;">
-    <div id="save-modal-content" style="background:rgba(20,20,25,0.95);border-radius:16px;padding:24px;max-width:400px;width:90%;border:1px solid rgba(255,255,255,0.1);box-shadow:0 8px 32px rgba(0,0,0,0.5);text-align:center;max-height:90vh;overflow-y:auto;">
-      <div style="color:#fff;font-family:'SartoshiScript',monospace;font-size:20px;margin-bottom:12px;" id="save-modal-title">your mfer</div>
-      <div id="save-modal-hint" style="background:rgba(255,255,255,0.1);padding:10px;border-radius:8px;margin-bottom:14px;color:#aaa;font-family:monospace;font-size:12px;"></div>
-      <div id="save-modal-media" style="display:flex;justify-content:center;margin-bottom:14px;"></div>
-      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-        <button id="save-modal-download" class="action-btn" style="background:#4ecdc4;font-size:13px;padding:8px 18px;">download</button>
-        <button id="save-modal-share" class="action-btn" style="background:#6b8cff;font-size:13px;padding:8px 18px;display:none;">share</button>
-        <button id="save-modal-close" class="action-btn" style="background:rgba(255,255,255,0.15);font-size:13px;padding:8px 18px;">close</button>
+      <div class="menu-tree-scene" aria-hidden="true">
+        <div class="menu-tree-ground"></div>
+        <div class="menu-tree-canopy c1"></div>
+        <div class="menu-tree-canopy c2"></div>
+        <div class="menu-tree-canopy c3"></div>
+        <div class="menu-tree-trunk"></div>
+        <div class="menu-tree-branch b1"></div>
+        <div class="menu-tree-branch b2"></div>
+        <div class="menu-tree-branch b3"></div>
+        <div class="menu-tree-crow"></div>
       </div>
     </div>
   </div>
 
-  <!-- Bottom HUD -->
-  <div id="hud">
-    <div id="level-select">
-      <button class="level-btn active" data-level="0">truck hit</button>
-      <button class="level-btn" data-level="1">stairs</button>
-      <button class="level-btn" data-level="2">wrecking ball</button>
-      <button class="level-btn" data-level="3">pachinko</button>
-      <button class="level-btn" data-level="4">press</button>
-      <button class="level-btn" data-level="5">cannon</button>
-      <button class="level-btn" data-level="6">cannonball</button>
-      <button class="level-btn" data-level="7">firing range</button>
-      <button class="level-btn" data-level="8">pool</button>
-      <button class="level-btn" data-level="9">golf</button>
-      <button class="level-btn" data-level="10">laundromat</button>
+  <audio id="menu-theme" src="./audio/crowgame_menu_theme.wav" loop preload="auto"></audio>
+  <audio id="gameplay-theme" src="./audio/crowgame_gameboy_loop.wav" loop preload="auto"></audio>
+
+  <div id="hud" class="panel">
+    <div id="title">crowgame</div>
+    <div id="quest-status">Quest: Talk to the quest giver.</div>
+    <div id="worm-status">Worms eaten: 0</div>
+    <div id="speed-status">Flight speed: normal</div>
+    <div id="quest-log"></div>
+    <div id="inventory-status">Inventory: empty</div>
+    <div id="craft-status">Crafting: locked</div>
+  </div>
+
+  <div id="dialogue" class="panel" aria-live="polite">
+    <div id="dialogue-speaker"></div>
+    <div id="dialogue-text"></div>
+  </div>
+
+  <div id="prompt" class="panel"></div>
+
+  <div id="controls" class="panel">
+    <div><strong>Controls</strong></div>
+      <div>Click game to lock mouse and look around</div>
+      <div>WASD move | Space rise | Shift descend</div>
+      <div>E talk / interact | F shoot slingshot</div>
+      <div>Hold right mouse to aim | I inventory | O crafting</div>
+      <div id="pointer-lock-note">Press Esc to release mouse.</div>
     </div>
-    <div id="action-row">
-      <button id="go-btn" class="action-btn">go!</button>
-      <button id="reset-btn" class="action-btn">reset</button>
-      <button id="clear-btn" class="action-btn">clear</button>
+
+  <button id="shoot-btn" type="button">Shoot (F)</button>
+
+  <div id="mobile-controls" aria-hidden="true">
+    <div id="mobile-stick-zone">
+      <div id="mobile-stick-knob"></div>
+    </div>
+    <div id="mobile-rise-fall">
+      <button id="mobile-rise-btn" class="mobile-btn vert" type="button">Rise</button>
+      <button id="mobile-fall-btn" class="mobile-btn vert" type="button">Fall</button>
+    </div>
+    <div id="mobile-actions">
+      <button id="mobile-interact-btn" class="mobile-btn" type="button">Talk</button>
+      <button id="mobile-shoot-btn" class="mobile-btn" type="button">Shoot</button>
+      <button id="mobile-aim-btn" class="mobile-btn" type="button">Aim</button>
+      <button id="mobile-inventory-btn" class="mobile-btn wide" type="button">Inventory</button>
+      <button id="mobile-crafting-btn" class="mobile-btn" type="button">Craft</button>
+    </div>
+    <div id="mobile-look-hint">Drag right side to look</div>
+  </div>
+
+  <div id="reticle"></div>
+
+  <div id="inventory-screen" class="menu-overlay">
+    <div class="mc-window" role="dialog" aria-label="Inventory screen">
+      <div class="mc-header">
+        <span>Inventory</span>
+        <button id="inventory-close" class="mc-close" type="button">X</button>
+      </div>
+      <div class="mc-label">Crow Pack</div>
+      <div id="inventory-grid" class="mc-grid"></div>
+      <div class="mc-label">Hotbar</div>
+      <div id="hotbar-grid" class="mc-grid"></div>
+      <div class="mc-info">Press I to close. Press O to jump to crafting.</div>
+    </div>
+  </div>
+
+  <div id="crafting-screen" class="menu-overlay">
+    <div class="mc-window" role="dialog" aria-label="Crafting screen">
+      <div class="mc-header">
+        <span>Crafting</span>
+        <button id="crafting-close" class="mc-close" type="button">X</button>
+      </div>
+      <div class="mc-label">Recipes (Manual Crafting)</div>
+      <div id="crafting-recipes" class="recipe-list"></div>
+      <div id="crafting-note"></div>
+      <div class="mc-info">Crafting only happens here. Press O to close. Press I to open inventory.</div>
     </div>
   </div>
 
